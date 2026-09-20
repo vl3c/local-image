@@ -1,68 +1,106 @@
 # local-image
 
-A private, fully local image generator and editor built on **Qwen-Image-2.1** and ComfyUI —
-with a one-page UI that is just a prompt box and a Generate button.
+A private, fully local image generator and editor. Type a prompt, press Generate.
 
-No node graphs, no cloud, no accounts. Your prompts and images never leave the machine.
+It runs **Qwen-Image-2.1** on your own GPU through ComfyUI, but replaces ComfyUI's
+node-graph interface with a single page that is just a prompt box and a button. No
+accounts, no cloud, no node wiring. Your prompts and images never leave the machine.
 
 ```
-install.ps1   →   start.cmd   →   http://127.0.0.1:8188/simple
+.\install.ps1   →   .\start.cmd   →   http://127.0.0.1:8188/simple
 ```
 
 ---
 
 ## What it does
 
-- **Generate** from a text prompt, at eight preset aspect ratios up to 2K.
-- **Edit** an image by describing the change — up to 10 reference images at once.
-- **Iterate**: every result has an *Edit this* button, so you can chain edits.
-- **Preview → commit**: a fast 20-step draft, then re-render the one you like at full quality.
-- **Enhance**: refine an image's actual pixels, when you need the composition to stay put.
+- **Generate** from text, at eight preset aspect ratios up to 2K.
+- **Edit** by describing a change — up to 10 reference images at once.
+- **Iterate** — every result has an *Edit this* button, so edits chain.
+- **Preview → commit** — a fast 20-step draft, then re-render the keeper at full quality.
+- **Enhance** — refine an image's actual pixels when the composition must not move.
 
-Qwen-Image-2.1 is unusually good at rendering *text inside images* — signs, labels,
-handwriting, dense captions — which is what makes it worth running locally.
+Qwen-Image-2.1 is unusually good at rendering *text inside images* — shop signs, labels,
+handwriting, dense captions. That is the main reason to run this one locally.
 
-## Requirements
+## What you need
 
 | | |
 |---|---|
-| OS | Windows 10/11 |
-| GPU | NVIDIA, 16 GB VRAM comfortably; 12 GB will work but stream heavily |
-| Disk | ~30 GB (24 GB weights + ~4 GB PyTorch) |
+| OS | Windows 10 / 11 |
+| GPU | NVIDIA. 16 GB VRAM is comfortable; 12 GB works but streams weights heavily |
+| Disk | **~30 GB free** |
 | RAM | 32 GB |
-| Python | 3.13 (via the `py` launcher) |
+| Software | Python 3.13 (via the `py` launcher) and Git, both on PATH |
 
-The bf16 weights need ~33 GB of RAM to offload and are *not* used here; this setup runs
-int8-quantized weights throughout, which fit in VRAM and are near-lossless.
+No CUDA toolkit needed — the PyTorch wheels bundle what they use. You just need a current
+NVIDIA driver.
 
 ## Install
 
 ```powershell
-git clone <your-repo-url> local-image
+git clone https://github.com/<you>/local-image.git
 cd local-image
 .\install.ps1
 ```
 
-That clones ComfyUI beside the scripts, builds an isolated venv, installs a CUDA build of
-PyTorch, installs the UI node, and downloads ~24 GB of weights with SHA256 verification.
-Re-running is safe — finished steps are skipped and downloads resume.
+Re-running is safe: finished steps are skipped and downloads resume where they stopped.
 
-Useful switches:
+### What install.ps1 puts on your disk
+
+Everything lands **inside the repo folder, in `ComfyUI/`**, which is gitignored. Nothing
+is installed system-wide, and your global Python is untouched.
+
+| What | Where | Size |
+|---|---|---|
+| ComfyUI (shallow clone from GitHub) | `ComfyUI/` | ~100 MB |
+| Private virtualenv | `ComfyUI/.venv/` | — |
+| PyTorch + CUDA runtime | `ComfyUI/.venv/` | ~4 GB |
+| ComfyUI's Python dependencies | `ComfyUI/.venv/` | ~1 GB |
+| `triton-windows` (optional, skippable) | `ComfyUI/.venv/` | ~250 MB |
+| This repo's UI node, copied in | `ComfyUI/custom_nodes/` | 22 KB |
+| Model weights (below) | `ComfyUI/models/` | ~24 GB |
+
+### What it downloads
+
+Weights come from [Comfy-Org/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1)
+on HuggingFace. **Every file is SHA256-verified** against the checksums pinned in
+[`models.json`](models.json); a mismatch aborts the install rather than loading the file.
+No HuggingFace account or token is required.
+
+| File | Size | What it is |
+|---|---|---|
+| `qwen_image_2.1_int8_convrot.safetensors` | 7.3 GB | The 7B diffusion transformer — makes the image |
+| `qwen3vl_8b_int8_convrot.safetensors` | 9.4 GB | Qwen3-VL-8B text encoder — reads your prompt |
+| `qwen_image_2.1_vae_bf16.safetensors` | 0.7 GB | Decodes latents to pixels |
+| `qwen3vl_8b_w4a8.safetensors` | 6.3 GB | Optional smaller encoder (`-AllModels`) |
+
+All are `.safetensors` — a data-only format, so **no code executes when weights load**.
+This setup never uses `.ckpt` or `.bin` pickle formats.
+
+Beyond that, the install talks to exactly three hosts: `github.com` (ComfyUI),
+`pypi.org` + `download.pytorch.org` (packages), and `huggingface.co` (weights). After
+installation, nothing contacts the network — see [PRIVACY.md](PRIVACY.md).
+
+### Install options
 
 ```powershell
-.\install.ps1 -ComfyUI D:\ai\ComfyUI   # install somewhere else
-.\install.ps1 -SkipModels              # code only, fetch weights later
-.\install.ps1 -AllModels               # also grab the smaller w4a8 encoder
+.\install.ps1 -ComfyUI D:\ai\ComfyUI   # put the heavy parts on another drive
+.\install.ps1 -SkipModels              # code only; fetch the 24 GB later
+.\install.ps1 -AllModels               # also grab the optional smaller encoder
 .\install.ps1 -CudaIndex cu129         # older driver
+.\install.ps1 -NoTriton                # skip the optional package
 .\install.ps1 -SyncNodeOnly            # just re-copy the UI after editing it
 ```
 
 ## Use it
 
-**`start.cmd`** launches the server and opens the page. Leave the console window open;
-closing it stops the server and frees the VRAM.
+**`.\start.cmd`** starts the server and opens the page. Leave the console window open —
+closing it stops the server and frees your VRAM.
 
-Or drive it from the command line:
+If you installed ComfyUI elsewhere, pass the path: `.\start.cmd D:\ai\ComfyUI`
+
+There is also a CLI, for scripting or batches:
 
 ```bash
 python scripts/generate.py "a neon sign reading OPEN LATE, rainy night"
@@ -71,29 +109,37 @@ python scripts/generate.py "make the sky stormy" --edit photo.png
 python scripts/generate.py "..." --enhance output/qwen21_00003_.png
 ```
 
-Images are written to `<ComfyUI>/output/` and stay there until you delete them. Each PNG
-embeds the prompt, seed and parent image, so you can always trace how one was made.
+### Where your images go
+
+Generated images are written to `ComfyUI/output/`, reference images you upload to
+`ComfyUI/input/`. **Both directories are gitignored entirely** — every file, every
+format — so nothing you make or feed in can be committed by accident.
+
+Nothing is auto-deleted. Each PNG embeds its prompt, seed and parent image, so you can
+reproduce any result or trace an edit chain backwards. (That metadata survives the
+original file but is stripped by most things that re-encode, and you can turn it off —
+see PRIVACY.md.)
 
 ## Two ways to improve a draft
 
-They are not the same operation, and the difference matters:
+They are different operations and the difference matters:
 
 | | **Full quality** | **Enhance** |
 |---|---|---|
 | starts from | the seed, fresh noise | the image's actual pixels |
 | composition | usually preserved — **can drift** | cannot drift |
 | detail gained | full 40-step render | less, but safe |
-| shown on | previews only | every result |
+| offered on | previews only | every result |
 
 Re-running a seed at a higher step count changes how the sampler discretizes the same
-trajectory. Usually both land on the same image; when a composition is underdetermined the
-coarse path can settle somewhere else entirely. In testing that happened roughly one time
-in five. *Enhance* re-encodes the pixels you are looking at and denoises only partway
-(0.45), so it physically cannot reframe the shot.
+trajectory. Usually both land on the same image; when a composition is underdetermined,
+the coarse path can settle somewhere else. In testing that happened about one time in
+five. *Enhance* re-encodes the pixels you are looking at and denoises only partway (0.45),
+so it physically cannot reframe the shot.
 
-## Measured performance
+## Speed
 
-RTX 5080 (16 GB), int8 DiT + int8 encoder, `--use-ck-attention`, warm:
+RTX 5080 (16 GB), int8 weights, `--use-ck-attention`, warm:
 
 | Resolution | Preview (20 steps) | Full (40 steps) |
 |---|---|---|
@@ -105,80 +151,58 @@ RTX 5080 (16 GB), int8 DiT + int8 encoder, `--use-ck-attention`, warm:
 Editing costs roughly 2× a generation at the same size, because the reference image's
 latents are prepended to the sequence.
 
-Peak VRAM sits at ~15.5 GB of 16.3 GB at every resolution — ComfyUI's dynamic memory
-manager deliberately fills the card and streams weights as needed. That is expected, not
-a problem.
+Peak VRAM sits near 15.5 GB of 16.3 GB at every resolution. That is ComfyUI's memory
+manager deliberately filling the card and streaming weights — expected, not a problem.
 
-### Things that helped, and things that didn't
-
-- **`--use-ck-attention`: −15%** (11.4s → 9.7s at 1024²). Enabled by default in `start.cmd`.
-  Sage attention was equivalent (9.9s); flash attention needs a package that isn't installed.
-- **Triton: no measurable effect** on its own (41.1s → 40.2s at 1664², within noise).
-  `install.ps1` installs it anyway since it is small and some kernels want it.
-- **int8 vs 4-bit text encoder: no measurable quality difference.** Both got counting
-  ("exactly three cups… exactly two bottles"), dense text rendering, and spatial negation
-  ("*under* the table, not on it") correct on identical seeds. int8 is the default only
-  because it costs nothing once ck attention is on (+0.3s, +700 MB VRAM). If VRAM is
-  tight, `qwen3vl_8b_w4a8` is 3 GB smaller and gave up nothing in testing.
-
-## Model variants
-
-Declared in [`models.json`](models.json), fetched from
-[Comfy-Org/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1), all checksum-verified.
-
-| File | Size | Role |
-|---|---|---|
-| `qwen_image_2.1_int8_convrot` | 7.3 GB | 7B DiT — the denoiser |
-| `qwen3vl_8b_int8_convrot` | 9.4 GB | Qwen3-VL-8B text encoder (default) |
-| `qwen3vl_8b_w4a8` | 6.3 GB | 4-bit encoder (optional, `-AllModels`) |
-| `qwen_image_2.1_vae_bf16` | 0.7 GB | 64-channel RGBA VAE |
-
-Switch models from the **Advanced** section of the page without restarting.
+**What helped, and what didn't.** `--use-ck-attention` was worth **−15%** (11.4s → 9.7s at
+1024²) and is on by default; sage attention was equivalent. Triton made no measurable
+difference alone. The int8 text encoder showed **no adherence gain** over the 4-bit one —
+both handled counting, dense text and spatial negation correctly on identical seeds — so
+it is the default only because it costs ~0.3s. If VRAM is tight, use `-AllModels` and pick
+`qwen3vl_8b_w4a8` from the page's Advanced section; it gave up nothing in testing.
 
 ## Privacy
 
-This runs entirely offline once installed. See [PRIVACY.md](PRIVACY.md) for the audit.
-In short, `start.cmd` binds **loopback only** (`--listen 127.0.0.1`, not reachable from
-your network) and passes `--disable-api-nodes` and `--disable-manager-ui`, so the paid
-cloud nodes ComfyUI bundles cannot load and the node registry is unreachable.
+Runs entirely offline after install. `start.cmd` binds **loopback only** and disables the
+cloud nodes ComfyUI bundles, its node registry, and all custom nodes except this repo's.
+[PRIVACY.md](PRIVACY.md) documents an audit of what the stack does and does not contact,
+including two findings about ComfyUI's *stock* interface that this page avoids entirely.
 
-Weights load from `.safetensors` only — a data-only format, so no code executes on load.
-
-Your images and prompts are gitignored and never committed. Before pushing:
+Before pushing anything to a public remote:
 
 ```bash
 python scripts/check_repo_safe.py
 ```
 
-which fails on large files, weights, images, local paths, emails and credential-shaped
-strings. Run it before making the repo public.
+It fails on large files, weights, images, local paths, email addresses and
+credential-shaped strings.
 
 ## Licensing
 
-The code here is MIT ([LICENSE](LICENSE)).
+Code here is **MIT** ([LICENSE](LICENSE)).
 
 **The model weights are not.** Qwen-Image-2.1 is released under the Qwen Research License,
-which restricts commercial use. This repo does not redistribute any weights — it downloads
-them from HuggingFace, where you accept that license. See
+which restricts commercial use. This repo redistributes no weights — it downloads them
+from HuggingFace, where their licence applies. Read
 [LICENSE-MODELS.md](LICENSE-MODELS.md) before using output commercially.
 
 ComfyUI is GPL-3.0 and is cloned at install time, not vendored here.
 
 ## Notes for anyone extending this
 
-Two things cost real debugging time and are easy to miss:
+Two things that cost real debugging time:
 
 1. **Reference image slots are namespaced.** `TextEncodeQwenImage21` uses ComfyUI
    "autogrow" inputs, so in the API workflow format the key is `images.image_1`, not
-   `image_1`. The un-namespaced form fails with
-   `unexpected keyword argument 'image_1'`.
+   `image_1`. The plain name fails with `unexpected keyword argument 'image_1'`.
 
-2. **Negative prompts do nothing.** The model is sampled guidance-free at `cfg 1.0`, and
-   ComfyUI drops the unconditional branch entirely at that value
-   (`comfy/samplers.py`, the `disable_cfg1_optimization` check). There is no negative
-   prompt box in the UI because it could only ever be decorative. Steer with positive
-   phrasing instead.
+2. **Negative prompts cannot work here.** The model samples guidance-free at `cfg 1.0`,
+   and ComfyUI drops the unconditional branch entirely at that value (the
+   `disable_cfg1_optimization` check in `comfy/samplers.py`). There is no negative prompt
+   box because it could only ever be decorative. Steer with positive phrasing.
 
-Also: editing requires the VAE wired into the text-encode node. Without it the reference
-images are only *seen* by the text encoder rather than becoming reference latents, which
-gives you "inspired by" instead of a real edit.
+Also: editing needs the VAE wired into the text-encode node. Without it the references are
+only *seen* by the text encoder instead of becoming reference latents — "inspired by"
+rather than a real edit. And `--whitelist-custom-nodes` matches the raw filename, so it
+needs `qwen_simple_ui.py`, extension included; without it nothing loads and `/simple`
+404s.
