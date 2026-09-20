@@ -1,14 +1,34 @@
 # ---------------------------------------------------------------------------
-# This repo holds ONLY first-party code: the UI node, the install and helper
-# scripts, and docs. Everything heavy or private is produced locally and must
-# never be committed. Run `python scripts/check_repo_safe.py` before pushing.
+# This repo tracks ONLY first-party source: the UI node, the scripts, the docs.
+#
+# Everything install.ps1 creates, everything download_models.py fetches, and
+# every image you generate or feed in is ignored here. After a fresh clone and
+# a full install, `git status` must still be clean - scripts/check_repo_safe.py
+# is the guard, run it before pushing.
 # ---------------------------------------------------------------------------
 
-# Upstream ComfyUI checkout (cloned by install.ps1) and anything under it
-/ComfyUI/
-ComfyUI/
+# --- your images -----------------------------------------------------------
+# Whole directories, not extensions: jpg, jpeg, heic, webp, psd, a stray .txt
+# of prompt notes, anything at any depth. Nothing in here is ever tracked.
+input/
+output/
+temp/
+clipspace/
 
-# Model weights - tens of GB, and under the Qwen Research License
+# --- everything install.ps1 creates ----------------------------------------
+# The ComfyUI checkout (any casing / common alternate names people pick)
+ComfyUI/
+comfyui/
+ComfyUI_*/
+
+# Python environments
+.venv/
+venv/
+env/
+.conda/
+
+# Model weights, wherever they land
+models/
 *.safetensors
 *.ckpt
 *.pt
@@ -16,51 +36,39 @@ ComfyUI/
 *.bin
 *.gguf
 *.onnx
-/models/
-models/
 
-# Your images: prompts and generated output are private by default
-/input/
-/output/
-input/
-output/
-/temp/
-temp/
-*.png
-*.jpg
-*.jpeg
-*.webp
-*.bmp
-*.tiff
-*.gif
-*.mp4
-*.webm
+# ComfyUI runtime state: workflow history, settings, the asset DB.
+# These embed local paths and your usage history.
+user/
+*.db
+*.sqlite
+*.sqlite3
+*.log
 
-# ...but keep hand-authored docs art if it is ever added deliberately
-!docs/img/*.png
-!docs/img/*.svg
+# --- belt and braces -------------------------------------------------------
+# Media at the repo root, in case an install lands somewhere unexpected.
+# docs/img/ stays available for deliberate documentation art.
+/*.png
+/*.jpg
+/*.jpeg
+/*.webp
+/*.gif
+/*.bmp
+/*.tiff
+/*.heic
+/*.mp4
+/*.webm
 
-# Python environments and caches
-.venv/
-venv/
-env/
+# --- python noise ----------------------------------------------------------
 __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.ipynb_checkpoints/
 
-# ComfyUI runtime state (may embed local paths and your workflow history)
-/user/
-user/
-*.db
-*.sqlite
-*.sqlite3
-*.log
-comfy.log
-
-# Secrets and machine-local config - never commit
+# --- secrets - never commit ------------------------------------------------
 .env
 .env.*
 *.key
@@ -71,8 +79,9 @@ secrets.json
 credentials.json
 config.local.*
 *.local
+extra_model_paths.yaml
 
-# Editor / OS noise
+# --- editor / OS -----------------------------------------------------------
 .vscode/
 .idea/
 *.swp
