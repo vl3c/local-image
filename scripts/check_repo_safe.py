@@ -72,7 +72,8 @@ PATTERNS = [
 ALLOWED = [
     "you@example.com",
     "noreply@anthropic.com",
-    "you@example.com",
+    # GitHub's per-account noreply form, which is what commits here are authored as
+    "@users.noreply.github.com",
     # published corporate contact quoted from the Qwen licence, not personal data
     "model-business@notice.qwencloud.com",
     "C:\\Users\\<you>",
@@ -96,6 +97,9 @@ ALLOWED_NORM = [normalize(a) for a in ALLOWED]
 def is_allowed(hit: str, label: str) -> bool:
     h = normalize(hit)
     for a in ALLOWED_NORM:
+        # An entry beginning with '@' allows a whole mail domain.
+        if a.startswith("@") and h.endswith(a):
+            return True
         # Exact, or a prefix that ends at a separator. A placeholder ending in
         # "you" must therefore not whitelist a real username starting "you".
         if h == a:
