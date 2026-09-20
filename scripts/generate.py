@@ -147,7 +147,17 @@ def main() -> int:
           + ("" if refs or enhance_file else f", {args.width}x{args.height}"))
 
     t0 = time.time()
-    pid = api("/prompt", {"prompt": build(args, refs, enhance_file), "client_id": "cli"})["prompt_id"]
+    try:
+        pid = api("/prompt", {"prompt": build(args, refs, enhance_file), "client_id": "cli"})["prompt_id"]
+    except urllib.error.HTTPError as exc:
+        # /prompt answers 400 with a JSON explanation when the graph is rejected
+        detail = exc.read().decode("utf-8", "replace")
+        try:
+            detail = json.dumps(json.loads(detail).get("error", detail), indent=2)
+        except ValueError:
+            pass
+        print(f"Rejected by the server (HTTP {exc.code}):\n{detail[:2000]}")
+        return 1
     while True:
         hist = api(f"/history/{pid}")
         if pid in hist:

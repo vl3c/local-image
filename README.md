@@ -39,12 +39,17 @@ NVIDIA driver.
 ## Install
 
 ```powershell
-git clone https://github.com/<you>/local-image.git
+git clone https://github.com/YOUR-USERNAME/local-image.git
 cd local-image
-.\install.ps1
+powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
+The `-ExecutionPolicy Bypass` is needed because stock Windows refuses to run downloaded
+scripts. If you would rather not, run `Unblock-File .\install.ps1` once and then just
+`.\install.ps1`.
+
 Re-running is safe: finished steps are skipped and downloads resume where they stopped.
+Works on both Windows PowerShell 5.1 (the built-in one) and PowerShell 7.
 
 ### What install.ps1 puts on your disk
 
@@ -78,9 +83,18 @@ No HuggingFace account or token is required.
 All are `.safetensors` — a data-only format, so **no code executes when weights load**.
 This setup never uses `.ckpt` or `.bin` pickle formats.
 
-Beyond that, the install talks to exactly three hosts: `github.com` (ComfyUI),
-`pypi.org` + `download.pytorch.org` (packages), and `huggingface.co` (weights). After
-installation, nothing contacts the network — see [PRIVACY.md](PRIVACY.md).
+During install, network traffic goes to: `github.com` (the ComfyUI clone), `pypi.org` and
+`files.pythonhosted.org` and `download.pytorch.org` (packages), and `huggingface.co`,
+which redirects weight downloads to its CDN (`*.cdn.hf.co`).
+
+Once installed, **the `/simple` page and the backend it talks to make no outbound
+requests** — every fetch the page makes is to your own server. ComfyUI's *stock*
+node-graph interface at `/` is a different matter; [PRIVACY.md](PRIVACY.md) documents what
+it contacts and how `start.cmd` blocks it.
+
+One thing that does not land inside the repo folder: pip's wheel cache, roughly 5 GB of
+it, goes to `%LOCALAPPDATA%\pip\Cache`. Pass `-NoPipCache` to skip it, at the cost of
+re-downloading if you reinstall.
 
 ### Install options
 
@@ -88,10 +102,18 @@ installation, nothing contacts the network — see [PRIVACY.md](PRIVACY.md).
 .\install.ps1 -ComfyUI D:\ai\ComfyUI   # put the heavy parts on another drive
 .\install.ps1 -SkipModels              # code only; fetch the 24 GB later
 .\install.ps1 -AllModels               # also grab the optional smaller encoder
-.\install.ps1 -CudaIndex cu129         # older driver
+.\install.ps1 -CudaIndex cu129         # older driver (or cu128)
+.\install.ps1 -PythonVersion 3.12      # if you do not have 3.13
 .\install.ps1 -NoTriton                # skip the optional package
+.\install.ps1 -NoPipCache              # do not leave ~5 GB in the pip cache
+.\install.ps1 -Commit latest           # track ComfyUI master (see below)
 .\install.ps1 -SyncNodeOnly            # just re-copy the UI after editing it
 ```
+
+**About `-Commit`.** By default the installer checks out the exact ComfyUI revision that
+[PRIVACY.md](PRIVACY.md)'s audit was performed against, so what you get matches what was
+reviewed. `-Commit latest` tracks master instead — newer, but the audit's specific
+findings no longer necessarily describe your copy.
 
 ## Use it
 
@@ -163,10 +185,15 @@ it is the default only because it costs ~0.3s. If VRAM is tight, use `-AllModels
 
 ## Privacy
 
-Runs entirely offline after install. `start.cmd` binds **loopback only** and disables the
-cloud nodes ComfyUI bundles, its node registry, and all custom nodes except this repo's.
-[PRIVACY.md](PRIVACY.md) documents an audit of what the stack does and does not contact,
-including two findings about ComfyUI's *stock* interface that this page avoids entirely.
+The `/simple` page and the generation backend make no outbound requests. `start.cmd` binds
+**loopback only** and disables the cloud nodes ComfyUI bundles, its node registry, and all
+custom nodes except this repo's — which also makes the browser enforce a
+`connect-src 'self'` content-security policy, so a page served here cannot reach a third
+party even if its JavaScript tried.
+
+[PRIVACY.md](PRIVACY.md) documents the full audit, including two findings about ComfyUI's
+*stock* node-graph interface that `/simple` avoids entirely, and the limits of what a
+static audit can prove.
 
 Before pushing anything to a public remote:
 

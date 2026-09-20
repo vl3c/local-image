@@ -60,13 +60,18 @@ def download(url: str, dest: Path, expect_sha: str) -> bool:
         print(f"    resuming at {human(have)}")
 
     try:
-        resp = urllib.request.urlopen(req)
+        resp = urllib.request.urlopen(req, timeout=60)
     except urllib.error.HTTPError as exc:
         if exc.code == 416:  # range not satisfiable: the file is already complete
             resp = None
         else:
             print(f"    HTTP {exc.code}: {exc.reason}")
             return False
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        # no network, DNS failure, TLS problem, HF unreachable
+        print(f"    network error: {exc}")
+        print("    Check your connection and re-run; the partial file is kept and will resume.")
+        return False
 
     if resp is not None:
         # A 200 to a Range request means the server ignored it; restart from scratch.
@@ -89,7 +94,10 @@ def download(url: str, dest: Path, expect_sha: str) -> bool:
     actual = sha256(dest)
     if actual != expect_sha:
         print(f"    CHECKSUM MISMATCH\n      expected {expect_sha}\n      got      {actual}")
-        print("    The file is corrupt or was tampered with. Delete it and retry.")
+        # Remove it rather than leaving a bad file that a later resume would
+        # append to, turning one bad download into a permanently stuck one.
+        dest.unlink(missing_ok=True)
+        print("    Discarded. Re-run to download it again.")
         return False
     print("    checksum OK")
     return True

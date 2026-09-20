@@ -16,18 +16,22 @@ if not exist "%COMFY%\.venv\Scripts\python.exe" (
   exit /b 1
 )
 
-rem --listen 127.0.0.1  loopback only, not reachable from the network
-rem --use-ck-attention  measured ~15%% faster than the pytorch default on an RTX 5080
-rem Privacy flags - see PRIVACY.md for why each one is here.
-rem   --listen 127.0.0.1          loopback only, not reachable from your network
-rem   --disable-api-nodes         paid-cloud nodes never load, AND stops the stock
-rem                               frontend's version check to api.comfy.org
-rem   --disable-manager-ui        no node registry browsing or installs
-rem   --disable-all-custom-nodes  + whitelist: only our UI node may load, so a
-rem                               future drive-by custom node cannot add egress
+rem Wait for the server to answer before opening the browser, rather than
+rem guessing a delay - a cold start has to load ~14 GB of weights.
+start "" /min cmd /c "for /l %%i in (1,1,150) do (curl.exe -s -o nul --max-time 2 http://127.0.0.1:8188/simple && (start "" http://127.0.0.1:8188/simple & exit /b) || timeout /t 2 >nul)"
+
+rem Privacy flags - see PRIVACY.md for what each one actually does.
+rem   --listen 127.0.0.1          loopback only (this is also the default)
+rem   --disable-api-nodes         the important one: paid-cloud nodes never load,
+rem                               the stock frontend's api.comfy.org version check
+rem                               is disabled, and a connect-src 'self' CSP header
+rem                               is added to every response
+rem   --disable-manager-ui        defensive; the manager is not installed here
+rem   --disable-all-custom-nodes  with the whitelist below, so only our node loads
+rem                               and a future drive-by node cannot add egress
+rem   --whitelist-custom-nodes    must include the .py extension or nothing loads
 rem Performance:
-rem   --use-ck-attention          measured ~15%% faster than pytorch attention on an RTX 5080
-start "" /min cmd /c "timeout /t 22 >nul & start "" http://127.0.0.1:8188/simple"
+rem   --use-ck-attention          measured ~15%% faster than pytorch attention
 "%COMFY%\.venv\Scripts\python.exe" "%COMFY%\main.py" ^
   --listen 127.0.0.1 ^
   --port 8188 ^

@@ -15,11 +15,18 @@ output/
 temp/
 clipspace/
 
+# Workflow exports embed the full prompt text
+workflow_api.json
+*_workflow.json
+
 # --- everything install.ps1 creates ----------------------------------------
-# The ComfyUI checkout (any casing / common alternate names people pick)
+# The ComfyUI checkout, under any casing or the alternate names people pick
 ComfyUI/
 comfyui/
 ComfyUI_*/
+ComfyUI-*/
+Comfy/
+comfy-ui/
 
 # Python environments
 .venv/
@@ -46,18 +53,38 @@ user/
 *.log
 
 # --- belt and braces -------------------------------------------------------
-# Media at the repo root, in case an install lands somewhere unexpected.
-# docs/img/ stays available for deliberate documentation art.
-/*.png
-/*.jpg
-/*.jpeg
-/*.webp
-/*.gif
-/*.bmp
-/*.tiff
-/*.heic
-/*.mp4
-/*.webm
+# Media ANYWHERE in the tree, at any depth, in case an install or an export
+# lands somewhere unexpected. docs/img/ is re-allowed below for doc art.
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.bmp
+*.tif
+*.tiff
+*.heic
+*.avif
+*.jxl
+*.psd
+*.svg
+*.mp4
+*.webm
+*.mov
+# camera raw
+*.cr2
+*.cr3
+*.dng
+*.arw
+*.nef
+*.raf
+*.orf
+*.rw2
+*.raw
+
+# Deliberate documentation art is the one exception.
+!docs/img/
+!docs/img/**
 
 # --- python noise ----------------------------------------------------------
 __pycache__/
@@ -80,6 +107,13 @@ credentials.json
 config.local.*
 *.local
 extra_model_paths.yaml
+.npmrc
+.netrc
+
+# Agent / tool state that can hold local paths and settings
+.claude/
+.cursor/
+.aider*
 
 # --- editor / OS -----------------------------------------------------------
 .vscode/

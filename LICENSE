@@ -19,11 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
---------------------------------------------------------------------------------
-
-This licence covers the code in this repository only.
-
-It does NOT cover the model weights, which are downloaded at install time and
-are released under the Qwen Research License (commercial use restricted), nor
-ComfyUI, which is GPL-3.0 and cloned at install time. See LICENSE-MODELS.md.

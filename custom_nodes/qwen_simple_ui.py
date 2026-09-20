@@ -237,6 +237,17 @@ const ENHANCE_DENOISE = 0.45;
 let refs = [];        // {ref: workflow string, url: thumbnail}
 let pending = 0;
 
+// An error can quote a server-side message containing a filename, so build the
+// node instead of concatenating into innerHTML.
+function showError(msg) {
+  const s = $('status');
+  s.textContent = '';
+  const span = document.createElement('span');
+  span.className = 'err';
+  span.textContent = String(msg);
+  s.appendChild(span);
+}
+
 const viewUrl = (filename, subfolder, type) =>
   '/view?filename=' + encodeURIComponent(filename)
   + '&subfolder=' + encodeURIComponent(subfolder || '')
@@ -298,7 +309,7 @@ async function addFiles(files) {
       refs.push({ref: name, url: viewUrl(r.name, r.subfolder, 'input')});
       renderRefs();
     } catch (e) {
-      $('status').innerHTML = '<span class="err">Upload failed: ' + e + '</span>';
+      showError('Upload failed: ' + e);
     }
   }
 }
@@ -507,7 +518,7 @@ async function runJob(p) {
       }
     }
   } catch (e) {
-    $('status').innerHTML = '<span class="err">' + String(e.message || e) + '</span>';
+    showError(e.message || e);
   } finally {
     pending--;
     $('go').disabled = false;

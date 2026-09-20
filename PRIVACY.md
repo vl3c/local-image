@@ -3,107 +3,127 @@
 The question this file answers: **can you edit private photos here without anything
 leaving the machine?**
 
-Short answer: **yes, using the `/simple` page that this repo adds.** The longer answer
-has two caveats, both about ComfyUI's *stock* UI rather than this one, and both closed by
-the flags in `start.cmd`.
+Short answer: **yes, using the `/simple` page this repo adds.** The caveats below are
+about ComfyUI's *stock* interface, not this one, and the flags in `start.cmd` close them.
 
-This is based on a static audit of ComfyUI at commit `99073836` — reading the code and
-tracing call graphs, not packet capture. Where that distinction matters, it is stated.
+This is based on a static audit — reading code and tracing call graphs, not packet
+capture — of ComfyUI at commit **`99073836`**, which is the revision `install.ps1` pins by
+default. If you install with `-Commit latest` you get whatever master is that day, and
+none of the specific findings below are guaranteed to still describe it.
 
 ## What was checked
 
 **The generation path performs no network I/O.** `execution.py`, `comfy_execution/`, and
-all 77 modules in `comfy_extras/` contain zero network primitives. The third-party
-packages (`comfy_kitchen`, which provides `--use-ck-attention`, plus `comfy_aimdo` and
-`comfy_angle`) contain no network code at all — only licence headers and reference URLs
-in comments.
+all 139 node modules in `comfy_extras/` contain no outbound network calls. The
+third-party packages (`comfy_kitchen`, which provides `--use-ck-attention`, plus
+`comfy_aimdo` and `comfy_angle`) contain no network code at all.
 
-**ComfyUI opts out of upstream telemetry on your behalf**, setting
-`HF_HUB_DISABLE_TELEMETRY=1` and `DO_NOT_TRACK=1` at startup (`main.py:41-42`). No
-analytics SDK exists anywhere in the Python backend.
+One dormant exception, for completeness: `comfy/k_diffusion/utils.py:42` contains a
+`urlopen` inside a `download_file` helper that has no callers anywhere in the tree. It
+is dead code, but it exists.
 
-**The server binds loopback only.** `--listen 127.0.0.1` reaches aiohttp's `TCPSite`
-directly; there is exactly one bind in the tree. No UPnP, no mDNS, no tunnelling, no
-second port. It is not reachable from your LAN. ComfyUI additionally ships an origin-check
+**The server binds loopback only.** There is exactly one socket bind in the tree, and
+`--listen 127.0.0.1` reaches it directly. No UPnP, no mDNS, no tunnelling, no second
+port. Not reachable from your LAN. (`127.0.0.1` is also ComfyUI's default — passing it
+explicitly is documentation, not a fix.) ComfyUI additionally ships an origin-check
 middleware that stops a malicious web page from driving your local server.
 
-**The asset indexer and its database are local-only.** The asset system is off by default;
-even enabled, `app/assets/` imports only `aiohttp.web` (server side) and has no client
-capability. The SQLite DB lives under `user/` and is never uploaded.
+**`--disable-api-nodes` installs a Content-Security-Policy header** on every response:
+
+```
+connect-src 'self' data:
+```
+
+This is the strongest single control here, and it is a browser-level one. It means a page
+served by ComfyUI *cannot* open a connection to any third-party host, regardless of what
+its JavaScript tries to do. Verified live with `curl -D -` against a running server.
+
+**The asset indexer and its database are local-only.** The asset system is off by
+default; even enabled, `app/assets/` has no HTTP client capability. The SQLite DB lives
+under `user/` and is never uploaded.
 
 **Nothing auto-downloads.** The frontend, workflow templates and docs are pre-installed
 pip packages served from disk. The one GitHub fetch in `app/frontend_management.py` is
 unreachable unless you pass a non-default `--front-end-version`.
 
-**Weights load from `.safetensors` only** — a data-only format. No code executes on load,
-which is why this setup never uses `.ckpt`/`.bin` pickles.
+**Weights load from `.safetensors` only** — a data-only format, so no code executes on
+load. This setup never uses `.ckpt` or `.bin` pickles.
 
 **This repo's page makes no external requests.** `custom_nodes/qwen_simple_ui.py` imports
 only `torch`, `comfy.model_management`, `folder_paths`, `aiohttp.web` and
 `server.PromptServer`. The page it serves loads no CDN script, no webfont, no external
-stylesheet — it uses system fonts. Every request it makes is same-origin and relative:
-`/models/...`, `/upload/image`, `/prompt`, `/history/...`, `/view`, and a WebSocket built
+stylesheet — it uses system fonts. Every request is same-origin and relative:
+`/models/...`, `/upload/image`, `/prompt`, `/history/...`, `/view`, plus a WebSocket built
 from `location.host`.
 
-## The two caveats — both about the stock UI
+One correction worth recording, because it is easy to repeat: ComfyUI sets
+`HF_HUB_DISABLE_TELEMETRY=1` and `DO_NOT_TRACK=1` at startup, but its own source comments
+those as having no effect on core ComfyUI — they exist for the benefit of custom nodes.
+They are a courtesy to the ecosystem, not a control on ComfyUI itself.
 
-These apply to `http://127.0.0.1:8188/` (ComfyUI's normal node-graph interface), **not** to
-`/simple`. If you only ever open `/simple`, neither is reachable.
+## The two caveats — both in the stock UI
 
-**1. Sentry is initialized with `enabled: true`** in the bundled frontend, unconditionally
-— not gated by any build flag. What it does *not* do matters: session replay is off
-(`replaysSessionSampleRate: 0`), so there is no DOM recording and no screenshots of your
-images; performance tracing is off; and all default integrations are disabled, so there is
-no global error handler or breadcrumb collection. Initialization alone transmits nothing.
-What it *does* mean is that explicit `reportError()` calls in the frontend will reach
-sentry.io. A handful of those are reachable on a local install (canvas layout failures,
-graph serialisation mismatches, workflow load failures). None deliberately carries prompt
-text or image data, but a workflow-load error forwards an arbitrary exception, and context
-is serialised eight levels deep — so it cannot be *proven* that a filename or prompt
-string could never appear in an error message. Low probability, non-zero, stock UI only.
+These apply to `http://127.0.0.1:8188/` (ComfyUI's node-graph interface), **not** to
+`/simple`. If you only open `/simple`, neither is reachable.
+
+**1. Sentry is initialized with `enabled: true`** in the bundled frontend,
+unconditionally. What it does *not* do matters: session replay is off, so there is no DOM
+recording and no screenshots of your images; performance tracing is off; and all default
+integrations are disabled, so there is no global error hook or breadcrumb collection.
+Initialization alone transmits nothing. What it *does* mean is that explicit
+`reportError()` calls could reach sentry.io — and since error context is serialised
+several levels deep, it cannot be *proven* that a filename could never appear in a message.
+
+However: with `--disable-api-nodes` set, the CSP `connect-src 'self'` header above means
+**the browser refuses the connection anyway**. Belt and braces.
 
 **2. A version check contacts `api.comfy.org`** with your ComfyUI version, form factor and
 locale when the stock UI loads. No image or prompt data. **`--disable-api-nodes` disables
-it**, which is why `start.cmd` passes that flag.
+it**, which is one more reason `start.cmd` passes that flag.
 
-Two further findings, both benign: Datadog RUM is bundled (248 KB) but **never
-initialized** — nothing calls `init()` and no client token exists in any app chunk, so it
-is dead weight rather than an egress path. Host telemetry is doubly gated behind a
-feature flag that defaults false *and* an Electron desktop bridge absent in a browser, so
-in a browser its code is never even fetched.
+Two further findings, both benign: Datadog RUM is bundled (~250 KB) but **never
+initialized** — nothing calls `init()` and no client token exists in any app chunk. Host
+telemetry is double-gated behind a feature flag defaulting false *and* an Electron desktop
+bridge absent in browsers, so in a browser its code is never even fetched.
 
 ## What `start.cmd` does about it
 
 ```
---listen 127.0.0.1           loopback only
---disable-api-nodes          no cloud nodes; also kills the api.comfy.org version check
---disable-manager-ui         no node registry
+--listen 127.0.0.1           loopback only (also the default)
+--disable-api-nodes          THE important one: no cloud nodes, no api.comfy.org
+                             version check, and adds connect-src 'self' CSP
+--disable-manager-ui         defensive only - see note
 --disable-all-custom-nodes   with the whitelist below
 --whitelist-custom-nodes qwen_simple_ui.py
 ```
 
-The whitelist is the forward-looking one. Custom nodes are the realistic vector by which
-something that imports `requests` could appear later; this pins loading to the one node
-in this repo. The value must include the `.py` extension — ComfyUI matches the raw
-filename, and `qwen_simple_ui` without it silently loads nothing.
+Two honest notes on that list. `--disable-manager-ui` is effectively a **no-op** in this
+install: the manager only activates with `--enable-manager`, and the `comfyui_manager`
+package is not installed at all. It is there so the flag survives if someone later
+installs it — not because it is closing anything today. And `--listen 127.0.0.1` restates
+the default rather than changing behaviour.
+
+The whitelist is the forward-looking control. Custom nodes are the realistic vector by
+which something that imports `requests` could appear later; this pins loading to the one
+node in this repo. The value must include the `.py` extension — ComfyUI compares the raw
+directory entry, so `qwen_simple_ui` without it silently loads nothing and `/simple` 404s.
 
 Verified after applying these: `/simple` responds, `EmptyQwenImage21Latent` and `KSampler`
-are present, and the bundled cloud nodes return `{}`.
+are present, the bundled cloud nodes return `{}`, and the CSP header is on every response.
 
 ## Options not enabled by default
 
 - **`--disable-metadata`** stops the prompt, seed and parent image being embedded in saved
-  PNGs. That embedded provenance is useful — it is how you trace an edit chain or
-  reproduce a result — so it is left on. Add the flag if you plan to share images widely
-  and would rather not ship the prompt inside them. It is a local-privacy measure, not an
-  egress one.
+  PNGs. That provenance is useful — it is how you reproduce a result or trace an edit
+  chain — so it stays on. Add the flag if you share images widely and would rather not
+  ship the prompt inside them. Local privacy, not egress.
 - **`HF_HUB_OFFLINE=1` / `TRANSFORMERS_OFFLINE=1`.** `huggingface_hub` is installed and
-  not forced offline, so a future node — or a model-path typo that made `from_pretrained`
-  fall through to a repo-id lookup — could reach the Hub. That would transmit a repo name,
-  never your images. Setting both in `start.cmd` closes it; it would also break
-  `download_models.py` until unset.
+  not forced offline, so a future custom node — or a model-path typo making
+  `from_pretrained` fall through to a repo-id lookup — could reach the Hub. That would
+  transmit a repo name, never your images. Setting both closes it. (It would *not* affect
+  `scripts/download_models.py`, which uses plain `urllib` and ignores those variables.)
 - **A per-process outbound firewall rule** on `<ComfyUI>\.venv\Scripts\python.exe`. This is
-  the one control that upgrades every "found no evidence of egress" above into "verified",
+  the one control that upgrades every "found no evidence of egress" here into "verified",
   because static analysis cannot prove a negative about code it did not execute. Worth
   doing if the photos are genuinely sensitive.
 
