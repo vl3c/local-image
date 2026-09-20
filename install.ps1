@@ -39,7 +39,9 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $ComfyUI       = (Join-Path $PSScriptRoot 'ComfyUI'),
+    # Left empty and resolved below: $PSScriptRoot is not reliably populated
+    # while param() defaults are evaluated under Windows PowerShell 5.1.
+    [string] $ComfyUI       = '',
     [string] $PythonVersion = '3.13',
     [string] $CudaIndex     = 'cu130',
     [string] $Commit        = '',
@@ -51,6 +53,13 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Resolve where this script lives, then everything else from it. $PSScriptRoot
+# is empty in some invocation modes, so fall back to the invocation path.
+$RepoRoot = $PSScriptRoot
+if (-not $RepoRoot) { $RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path }
+if (-not $RepoRoot) { $RepoRoot = (Get-Location).Path }
+if (-not $ComfyUI)  { $ComfyUI  = Join-Path $RepoRoot 'ComfyUI' }
 
 # The ComfyUI revision PRIVACY.md's audit was performed against.
 $AUDITED_COMMIT = '99073836d45f66053c45ba8564984e6def9cebba'
@@ -80,7 +89,7 @@ function Probe {
 }
 
 $venvPy  = Join-Path $ComfyUI '.venv\Scripts\python.exe'
-$nodeSrc = Join-Path $PSScriptRoot 'custom_nodes\qwen_simple_ui.py'
+$nodeSrc = Join-Path $RepoRoot 'custom_nodes\qwen_simple_ui.py'
 
 # --- fast path: just refresh the node ------------------------------------
 if ($SyncNodeOnly) {
@@ -225,7 +234,7 @@ if ($SkipModels) {
 } else {
     Step 'Model weights (~24 GB, checksum-verified)'
     Note 'Resumable - if this is interrupted, just re-run install.ps1.'
-    $dlArgs = @((Join-Path $PSScriptRoot 'scripts\download_models.py'), '--comfyui', $ComfyUI)
+    $dlArgs = @((Join-Path $RepoRoot 'scripts\download_models.py'), '--comfyui', $ComfyUI)
     if ($AllModels) { $dlArgs += '--all' }
     & $venvPy @dlArgs
     if ($LASTEXITCODE -ne 0) { Fail 'model download or verification failed' }
@@ -233,7 +242,7 @@ if ($SkipModels) {
 
 # --- done -----------------------------------------------------------------
 Step 'Done'
-$startArg = if ($ComfyUI -eq (Join-Path $PSScriptRoot 'ComfyUI')) { '' } else { " `"$ComfyUI`"" }
+$startArg = if ($ComfyUI -eq (Join-Path $RepoRoot 'ComfyUI')) { '' } else { " `"$ComfyUI`"" }
 Write-Host @"
 
   Start it with:      .\start.cmd$startArg
