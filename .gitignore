@@ -1,0 +1,82 @@
+# ---------------------------------------------------------------------------
+# This repo holds ONLY first-party code: the UI node, the install and helper
+# scripts, and docs. Everything heavy or private is produced locally and must
+# never be committed. Run `python scripts/check_repo_safe.py` before pushing.
+# ---------------------------------------------------------------------------
+
+# Upstream ComfyUI checkout (cloned by install.ps1) and anything under it
+/ComfyUI/
+ComfyUI/
+
+# Model weights - tens of GB, and under the Qwen Research License
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.gguf
+*.onnx
+/models/
+models/
+
+# Your images: prompts and generated output are private by default
+/input/
+/output/
+input/
+output/
+/temp/
+temp/
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.bmp
+*.tiff
+*.gif
+*.mp4
+*.webm
+
+# ...but keep hand-authored docs art if it is ever added deliberately
+!docs/img/*.png
+!docs/img/*.svg
+
+# Python environments and caches
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ComfyUI runtime state (may embed local paths and your workflow history)
+/user/
+user/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+comfy.log
+
+# Secrets and machine-local config - never commit
+.env
+.env.*
+*.key
+*.pem
+*.pfx
+*.p12
+secrets.json
+credentials.json
+config.local.*
+*.local
+
+# Editor / OS noise
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini

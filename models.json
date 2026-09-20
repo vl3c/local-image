@@ -1,0 +1,45 @@
+{
+  "_comment": [
+    "Weight manifest for Qwen-Image-2.1 as packaged by the ComfyUI org.",
+    "SHA256 values were taken from the HuggingFace LFS metadata and verified",
+    "against the downloaded files. Weights are NOT redistributed by this repo;",
+    "they are fetched from HuggingFace and are covered by the Qwen Research",
+    "License, which is more restrictive than this repo's MIT license."
+  ],
+  "source": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1",
+  "base_url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main",
+  "files": [
+    {
+      "path": "vae/qwen_image_2.1_vae_bf16.safetensors",
+      "dest": "models/vae",
+      "bytes": 683951680,
+      "sha256": "bb21f7473051e1ac368515dd3f2e15cd44d7a11748ee8823e1ddca3e4876b7c9",
+      "required": true,
+      "note": "64-channel RGBA VAE, 16x spatial compression."
+    },
+    {
+      "path": "diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+      "dest": "models/diffusion_models",
+      "bytes": 7261000000,
+      "sha256": "cb74113cb03faecd79611b01fd7fd642f0aa60d6f0b95086abee214d75eaa57d",
+      "required": true,
+      "note": "7B DiT, int8 rotation-based quantization. Near-lossless vs bf16."
+    },
+    {
+      "path": "text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+      "dest": "models/text_encoders",
+      "bytes": 9350000000,
+      "sha256": "8bfd0f6e12abf2d2d697ecc888e5e90b0d6741d6708f05799f53afa560452e8f",
+      "required": true,
+      "note": "Qwen3-VL-8B text encoder, int8. Default choice."
+    },
+    {
+      "path": "text_encoders/qwen3vl_8b_w4a8.safetensors",
+      "dest": "models/text_encoders",
+      "bytes": 6310000000,
+      "sha256": "7754425e55e7bea2bfde4dde59a4cc236cb44e5ee9c215ea66ef8d47012824eb",
+      "required": false,
+      "note": "4-bit weights. 3GB smaller, ~700MB less VRAM. Measured no adherence loss on counting, dense text or spatial-negation prompts - use it if VRAM is tight."
+    }
+  ]
+}
