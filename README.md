@@ -117,10 +117,23 @@ findings no longer necessarily describe your copy.
 
 ## Use it
 
-**`.\start.cmd`** starts the server and opens the page. Leave the console window open —
-closing it stops the server and frees your VRAM.
+**`.\start.cmd`** starts the server and opens the page once it is ready. Leave the console
+window open — closing it stops the server and frees your VRAM.
 
 If you installed ComfyUI elsewhere, pass the path: `.\start.cmd D:\ai\ComfyUI`
+
+### Stopping it
+
+Normally: close the `start.cmd` console window. That is the whole answer.
+
+If there is no window to close — the server was started in the background, or the window
+got closed without the process dying — run **`.\stop.cmd`**. It reports what it stopped
+and how much VRAM came back.
+
+It matches on the ComfyUI command line, so other Python programs you have running are left
+alone. Note that ComfyUI re-executes itself at startup, so there are always **two** python
+processes to stop: a small launcher and the real server holding the VRAM. Killing only one
+in Task Manager can leave the other resident.
 
 There is also a CLI, for scripting or batches:
 
