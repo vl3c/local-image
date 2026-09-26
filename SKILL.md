@@ -74,10 +74,9 @@ started from that repository:
 cmd //c "<local-agent base dir>\\stop.cmd"
 ```
 
-It matches processes by its own folder path, so if the server was started through a different
-path to the same folder (the skills junction vs the real folder), it reports "Nothing running"
-and misses it. Confirm with `tasklist | grep -i llama-server` afterwards. If it's still there,
-run the `stop.cmd` in the folder the junction points to.
+It resolves junctions, so it works from either the skills junction or the real folder. Confirm
+with `tasklist | grep -i llama-server` afterwards anyway. If one is still there, it was started
+from somewhere else: tell the user rather than killing it.
 
 Anything else holding several GB (a game, another ComfyUI): tell the user rather than killing it.
 If ComfyUI is already up and the card is full, that's this server, and it's fine.
