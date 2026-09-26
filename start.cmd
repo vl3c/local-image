@@ -8,10 +8,11 @@ rem   start.cmd --no-browser [path]    server only, for scripts and agents
 setlocal
 cd /d "%~dp0"
 
+rem shift /1 leaves %0 alone, so %~dp0 below still names this folder.
 set "BROWSER=1"
 if /i "%~1"=="--no-browser" (
   set "BROWSER="
-  shift
+  shift /1
 )
 
 set "COMFY=%~dp0ComfyUI"
@@ -27,7 +28,7 @@ if not exist "%COMFY%\.venv\Scripts\python.exe" (
 )
 
 rem Wait for the server to answer before opening the browser, rather than
-rem guessing a delay - a cold start has to load ~14 GB of weights.
+rem guessing a delay - a cold start has to load ~17 GB of weights.
 if defined BROWSER start "" /min cmd /c "for /l %%i in (1,1,150) do (curl.exe -s -o nul --max-time 2 http://127.0.0.1:8188/simple && (start "" http://127.0.0.1:8188/simple & exit /b) || timeout /t 2 >nul)"
 
 rem Privacy flags - see PRIVACY.md for what each one actually does.

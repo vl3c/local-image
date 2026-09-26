@@ -5,7 +5,7 @@ description: Generate or edit images locally with Qwen-Image-2.1 through ComfyUI
 
 # local-image: generate and edit images on the local GPU
 
-The model is fast (about 5–40 s per image once warm) and unusually good at lettering, but it
+The model is fast (about 5–80 s per image once warm, by size and quality) and unusually good at lettering, but it
 fails quietly: a misspelled word, the wrong object edited, or an edit that did nothing. You are
 the art director. You write the prompt, run it, **look at every result**, and iterate until it
 matches the request or you have to tell the user it doesn't.
@@ -74,6 +74,11 @@ started from that repository:
 cmd //c "<local-agent base dir>\\stop.cmd"
 ```
 
+It matches processes by its own folder path, so if the server was started through a different
+path to the same folder (the skills junction vs the real folder), it reports "Nothing running"
+and misses it. Confirm with `tasklist | grep -i llama-server` afterwards. If it's still there,
+run the `stop.cmd` in the folder the junction points to.
+
 Anything else holding several GB (a game, another ComfyUI): tell the user rather than killing it.
 If ComfyUI is already up and the card is full, that's this server, and it's fine.
 
@@ -111,16 +116,17 @@ python "<base dir>/scripts/generate.py" "" --enhance keeper.png --out <dir>
 | `--enhance IMG` | Refines the pixels (denoise 0.45). It can't recompose, so it's safe for a keeper. |
 | `--wait S` | Wait up to S seconds for the server to come up. |
 | `--timeout S` | Give up on the result after S seconds (default 900). The job still finishes on the server. |
-| `--out DIR` | Copy results to DIR with the prompt metadata stripped. Prints the full paths. |
+| `--out DIR` | Copy results to DIR with the prompt metadata stripped. Prints the full paths. Never overwrites: a name that already exists gets a `_1` suffix. |
 | `--keep-metadata` | With `--out`, keep the embedded prompt, seed and workflow. |
 
 An identical request (same prompt, seed and settings) comes back instantly from the server's
-cache, as copies of the earlier files. To get a different image, change the seed.
+cache: it returns the earlier files again rather than rendering. To get a different image,
+change the seed.
 
 **Exit codes:**
-- 0: done. The printed paths are the images.
-- 1: failed, no server, or timed out. The message says which.
-- 2: bad arguments.
+- 0: done. With `--out`, the printed paths are the images.
+- 1: failed, no server, lost the server, or timed out. The message says which.
+- 2: bad arguments, including an `--edit` or `--enhance` image that doesn't exist.
 
 Without `--out` the images are only in `ComfyUI/output/`, which keeps the metadata. Always pass
 `--out`: drafts go to your scratchpad (or a temp folder), and keepers go where the user wants
