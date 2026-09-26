@@ -175,10 +175,25 @@ python scripts/generate.py "a neon sign reading OPEN LATE, rainy night"
 python scripts/generate.py "a lighthouse at dawn" --size 1664x928 --seed 42 --preview
 python scripts/generate.py "make the sky stormy" --edit photo.png
 python scripts/generate.py "..." --enhance output/qwen21_00003_.png
+python scripts/generate.py "a lighthouse" --wait 120 --out renders
 ```
 
-Needs the server running. Sizes must be multiples of 16; `--size` is ignored when editing
-(use `--scale`).
+Needs the server running; `--wait 120` waits for one that is still starting. Sizes must be
+multiples of 16; `--size` is ignored when editing (use `--scale`). `--out DIR` copies the
+results into `DIR` with the embedded prompt stripped (`--keep-metadata` keeps it), and
+`--timeout` stops waiting for a result (default 900 s). `python scripts/generate.py -h` lists
+everything.
+
+`.\start.cmd --no-browser` starts the server without opening the page, for scripts.
+
+### As a Claude Code skill
+
+`SKILL.md` lets Claude Code drive all of this: it generates, looks at each result, iterates,
+and hands you the keepers. To install it, link the repo into your skills folder:
+
+```powershell
+cmd /c mklink /J "$env:USERPROFILE\.claude\skills\local-image" (Get-Location).Path
+```
 
 ### Where your images go
 
@@ -335,6 +350,7 @@ Only first-party source is tracked. Everything the installer creates is ignored,
 install.ps1                     one-shot setup; re-runnable
 start.cmd                       run the server, open the page
 stop.cmd                        stop it when there is no window to close
+SKILL.md                        Claude Code skill: generate, check and iterate
 models.json                     weight manifest: URLs, sizes, SHA256
 custom_nodes/qwen_simple_ui.py  the /simple page and one helper node
 scripts/generate.py             CLI: generate, edit, enhance
