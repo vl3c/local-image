@@ -6,9 +6,15 @@ The server must already be running (start.cmd). Everything stays on localhost.
     python scripts/generate.py "neon sign reading OPEN LATE" --size 1664x928 --seed 42
     python scripts/generate.py "make the sky stormy" --edit photo.png
     python scripts/generate.py "" --enhance output/qwen21_00003_.png
+    python scripts/generate.py "a lighthouse" --wait 120 --out some/dir
 
 Sizes must be multiples of 16. Editing takes its output shape from the first
 reference image, so --size is ignored there; use --scale instead.
+
+--out copies the results into a folder of your choosing, with the embedded
+prompt, seed and workflow stripped (the originals in ComfyUI/output keep them).
+
+Exit status: 0 done, 1 failed or no server, 2 bad arguments.
 """
 
 from __future__ import annotations
@@ -22,6 +28,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+
+# PNG text chunks: where ComfyUI embeds the prompt and the whole workflow.
+PNG_SIGNATURE = bytes.fromhex("89504e470d0a1a0a")
+TEXT_CHUNKS = {b"tEXt", b"iTXt", b"zTXt"}
 
 SERVER = "http://127.0.0.1:8188"
 FULL_STEPS = 40
@@ -57,6 +67,47 @@ def upload(path: Path) -> str:
                                  headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
     r = json.load(urllib.request.urlopen(req))
     return (r["subfolder"] + "/" if r.get("subfolder") else "") + r["name"]
+
+
+def wait_for_server(seconds: float) -> bool:
+    """True once the server answers; a cold start takes a few seconds to bind."""
+    deadline = time.time() + seconds
+    while True:
+        try:
+            api("/system_stats")
+            return True
+        except OSError:  # URLError, refused, reset while starting up
+            if time.time() >= deadline:
+                return False
+            time.sleep(2)
+
+
+def strip_png_text(data: bytes) -> bytes:
+    """Drop text chunks, so the prompt does not travel with the file."""
+    if data[:8] != PNG_SIGNATURE:
+        return data
+    out, i = bytearray(data[:8]), 8
+    while i + 8 <= len(data):
+        length = int.from_bytes(data[i:i + 4], "big")
+        end = i + 12 + length
+        if data[i + 4:i + 8] not in TEXT_CHUNKS:
+            out += data[i:end]
+        i = end
+    return bytes(out)
+
+
+def fetch(img: dict, out_dir: Path, keep_metadata: bool) -> Path:
+    """Copy one result out of the server's output dir."""
+    query = urllib.parse.urlencode({"filename": img["filename"],
+                                    "subfolder": img.get("subfolder", ""),
+                                    "type": img.get("type", "output")})
+    data = urllib.request.urlopen(f"{SERVER}/view?{query}").read()
+    if not keep_metadata:
+        data = strip_png_text(data)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    dest = out_dir / img["filename"]
+    dest.write_bytes(data)
+    return dest.resolve()
 
 
 def build(args, refs: list[str], enhance_file: str | None):
@@ -118,6 +169,14 @@ def main() -> int:
     ap.add_argument("--scale", type=int, default=1328, help="output scale when editing")
     ap.add_argument("--model", default=DIFFUSION)
     ap.add_argument("--encoder", default=ENCODER)
+    ap.add_argument("--wait", type=float, default=0, metavar="SECONDS",
+                    help="wait this long for the server to come up (default: fail at once)")
+    ap.add_argument("--timeout", type=float, default=900, metavar="SECONDS",
+                    help="give up waiting for the result after this long (default 900)")
+    ap.add_argument("--out", type=Path, metavar="DIR",
+                    help="copy the results here, prompt metadata stripped")
+    ap.add_argument("--keep-metadata", action="store_true",
+                    help="with --out, keep the embedded prompt, seed and workflow")
     args = ap.parse_args()
 
     try:
@@ -133,9 +192,7 @@ def main() -> int:
     if args.seed is None:
         args.seed = random.randrange(2**32)
 
-    try:
-        api("/system_stats")
-    except urllib.error.URLError:
+    if not wait_for_server(args.wait):
         print(f"No server at {SERVER}. Start it with start.cmd first.")
         return 1
 
@@ -159,6 +216,10 @@ def main() -> int:
         print(f"Rejected by the server (HTTP {exc.code}):\n{detail[:2000]}")
         return 1
     while True:
+        if time.time() - t0 > args.timeout:
+            print(f"Timed out after {args.timeout:.0f}s. The job ({pid}) is still queued on the "
+                  "server and its result will land in ComfyUI/output.")
+            return 1
         hist = api(f"/history/{pid}")
         if pid in hist:
             entry = hist[pid]
@@ -169,7 +230,10 @@ def main() -> int:
                 return 1
             for node in entry.get("outputs", {}).values():
                 for img in node.get("images", []):
-                    print(f"  {img['filename']}")
+                    if args.out:
+                        print(f"  {fetch(img, args.out, args.keep_metadata)}")
+                    else:
+                        print(f"  {img['filename']}")
             print(f"{time.time() - t0:.1f}s")
             return 0
         time.sleep(0.5)

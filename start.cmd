@@ -1,8 +1,18 @@
 @echo off
 rem Start the local image generator and open the simple prompt page.
 rem Close this window to stop the server and release VRAM.
+rem
+rem   start.cmd                        default install, opens the page
+rem   start.cmd D:\ai\ComfyUI          an install somewhere else
+rem   start.cmd --no-browser [path]    server only, for scripts and agents
 setlocal
 cd /d "%~dp0"
+
+set "BROWSER=1"
+if /i "%~1"=="--no-browser" (
+  set "BROWSER="
+  shift
+)
 
 set "COMFY=%~dp0ComfyUI"
 if not "%~1"=="" set "COMFY=%~1"
@@ -18,7 +28,7 @@ if not exist "%COMFY%\.venv\Scripts\python.exe" (
 
 rem Wait for the server to answer before opening the browser, rather than
 rem guessing a delay - a cold start has to load ~14 GB of weights.
-start "" /min cmd /c "for /l %%i in (1,1,150) do (curl.exe -s -o nul --max-time 2 http://127.0.0.1:8188/simple && (start "" http://127.0.0.1:8188/simple & exit /b) || timeout /t 2 >nul)"
+if defined BROWSER start "" /min cmd /c "for /l %%i in (1,1,150) do (curl.exe -s -o nul --max-time 2 http://127.0.0.1:8188/simple && (start "" http://127.0.0.1:8188/simple & exit /b) || timeout /t 2 >nul)"
 
 rem Privacy flags - see PRIVACY.md for what each one actually does.
 rem   --listen 127.0.0.1          loopback only (this is also the default)
