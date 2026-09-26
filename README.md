@@ -132,7 +132,7 @@ no longer necessarily describe your copy.
 
 **`.\start.cmd`** starts the server and opens `http://127.0.0.1:8188/simple` in your
 default browser once it is actually ready. (A minimized helper window polls the server and
-closes itself; a cold start takes about half a minute because ~14 GB of weights have to
+closes itself; a cold start takes about half a minute because ~17 GB of weights have to
 load, which is why it waits rather than guessing a delay.)
 
 Leave the main console window open — that is the server.
@@ -189,9 +189,11 @@ everything.
 ### As a Claude Code skill
 
 `SKILL.md` lets Claude Code drive all of this: it generates, looks at each result, iterates,
-and hands you the keepers. To install it, link the repo into your skills folder:
+and hands you the keepers. To install it, link the repo into your skills folder, from the
+repo root:
 
 ```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.claude\skills" | Out-Null
 cmd /c mklink /J "$env:USERPROFILE\.claude\skills\local-image" (Get-Location).Path
 ```
 

@@ -20,6 +20,7 @@ Exit status: 0 done, 1 failed or no server, 2 bad arguments.
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import random
 import sys
@@ -38,6 +39,11 @@ FULL_STEPS = 40
 PREVIEW_STEPS = 20
 ENHANCE_DENOISE = 0.45
 
+HTTP_TIMEOUT = 60  # per request; a single call only blocks this long, whatever --timeout says
+# What a server that is starting, stopping or gone raises: OSError covers URLError,
+# refused and reset connections and socket timeouts; the rest are half-sent answers.
+SERVER_ERRORS = (OSError, http.client.HTTPException, ValueError)
+
 DIFFUSION = "qwen_image_2.1_int8_convrot.safetensors"
 ENCODER = "qwen3vl_8b_int8_convrot.safetensors"
 VAE = "qwen_image_2.1_vae_bf16.safetensors"
@@ -46,10 +52,10 @@ VAE = "qwen_image_2.1_vae_bf16.safetensors"
 def api(path: str, payload=None):
     url = SERVER + path
     if payload is None:
-        return json.load(urllib.request.urlopen(url))
+        return json.load(urllib.request.urlopen(url, timeout=HTTP_TIMEOUT))
     req = urllib.request.Request(url, data=json.dumps(payload).encode(),
                                  headers={"Content-Type": "application/json"})
-    return json.load(urllib.request.urlopen(req))
+    return json.load(urllib.request.urlopen(req, timeout=HTTP_TIMEOUT))
 
 
 def upload(path: Path) -> str:
@@ -65,7 +71,7 @@ def upload(path: Path) -> str:
     body += f"--{boundary}--\r\n".encode()
     req = urllib.request.Request(SERVER + "/upload/image", data=bytes(body),
                                  headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
-    r = json.load(urllib.request.urlopen(req))
+    r = json.load(urllib.request.urlopen(req, timeout=HTTP_TIMEOUT))
     return (r["subfolder"] + "/" if r.get("subfolder") else "") + r["name"]
 
 
@@ -76,7 +82,7 @@ def wait_for_server(seconds: float) -> bool:
         try:
             api("/system_stats")
             return True
-        except OSError:  # URLError, refused, reset while starting up
+        except SERVER_ERRORS:  # refused, reset or half-answered while starting up
             if time.time() >= deadline:
                 return False
             time.sleep(2)
@@ -101,11 +107,17 @@ def fetch(img: dict, out_dir: Path, keep_metadata: bool) -> Path:
     query = urllib.parse.urlencode({"filename": img["filename"],
                                     "subfolder": img.get("subfolder", ""),
                                     "type": img.get("type", "output")})
-    data = urllib.request.urlopen(f"{SERVER}/view?{query}").read()
+    data = urllib.request.urlopen(f"{SERVER}/view?{query}", timeout=HTTP_TIMEOUT).read()
     if not keep_metadata:
         data = strip_png_text(data)
     out_dir.mkdir(parents=True, exist_ok=True)
-    dest = out_dir / img["filename"]
+    # ComfyUI restarts its numbering once its output dir is emptied, so a name
+    # can come round again: never overwrite an earlier keeper.
+    name = Path(img["filename"]).name
+    dest, n = out_dir / name, 1
+    while dest.exists():
+        dest = out_dir / f"{Path(name).stem}_{n}{Path(name).suffix}"
+        n += 1
     dest.write_bytes(data)
     return dest.resolve()
 
@@ -188,6 +200,14 @@ def main() -> int:
         print("--size values must be multiples of 16")
         return 2
 
+    if args.keep_metadata and not args.out:
+        print("--keep-metadata only applies with --out")
+        return 2
+    missing = [p for p in args.edit + ([args.enhance] if args.enhance else []) if not Path(p).is_file()]
+    if missing:
+        print("No such image: " + ", ".join(missing))
+        return 2
+
     args.steps = args.steps or (PREVIEW_STEPS if args.preview else FULL_STEPS)
     if args.seed is None:
         args.seed = random.randrange(2**32)
@@ -196,15 +216,15 @@ def main() -> int:
         print(f"No server at {SERVER}. Start it with start.cmd first.")
         return 1
 
-    refs = [upload(Path(p)) for p in args.edit]
-    enhance_file = upload(Path(args.enhance)) if args.enhance else None
-
-    what = "enhance" if enhance_file else ("edit" if refs else "generate")
-    print(f"{what}: seed {args.seed}, {args.steps} steps"
-          + ("" if refs or enhance_file else f", {args.width}x{args.height}"))
-
-    t0 = time.time()
     try:
+        refs = [upload(Path(p)) for p in args.edit]
+        enhance_file = upload(Path(args.enhance)) if args.enhance else None
+
+        what = "enhance" if enhance_file else ("edit" if refs else "generate")
+        print(f"{what}: seed {args.seed}, {args.steps} steps"
+              + ("" if refs or enhance_file else f", {args.width}x{args.height}"))
+
+        t0 = time.time()
         pid = api("/prompt", {"prompt": build(args, refs, enhance_file), "client_id": "cli"})["prompt_id"]
     except urllib.error.HTTPError as exc:
         # /prompt answers 400 with a JSON explanation when the graph is rejected
@@ -215,10 +235,21 @@ def main() -> int:
             pass
         print(f"Rejected by the server (HTTP {exc.code}):\n{detail[:2000]}")
         return 1
+    except SERVER_ERRORS as exc:
+        print(f"Lost the server while submitting: {exc}")
+        return 1
+    try:
+        return wait_for_result(args, pid, t0)
+    except SERVER_ERRORS as exc:
+        print(f"Lost the server while waiting for job {pid}: {exc}")
+        return 1
+
+
+def wait_for_result(args, pid: str, t0: float) -> int:
     while True:
         if time.time() - t0 > args.timeout:
-            print(f"Timed out after {args.timeout:.0f}s. The job ({pid}) is still queued on the "
-                  "server and its result will land in ComfyUI/output.")
+            print(f"Timed out after {args.timeout:.0f}s. The job ({pid}) is still queued or running "
+                  "on the server, and its result will land in ComfyUI/output.")
             return 1
         hist = api(f"/history/{pid}")
         if pid in hist:
