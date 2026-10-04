@@ -135,7 +135,7 @@ default browser once it is actually ready. (A minimized helper window polls the 
 closes itself; a cold start takes about half a minute because ~17 GB of weights have to
 load, which is why it waits rather than guessing a delay.)
 
-Leave the main console window open — that is the server. It shows the address, one line per
+Leave the server's window open while you use it. It shows the address, one line per
 image job and any errors; everything ComfyUI prints goes to `logs\server.log`, timestamped, with
 the previous run kept as `logs\server.previous.log` (`scripts\logtee.py` does this). `logs\` is
 gitignored.
@@ -161,8 +161,8 @@ Results stack newest-first with **Full quality**, **Enhance**, **Edit this** and
 
 Close the `start.cmd` console window. That is the whole answer.
 
-If there is no window to close — the server was started in the background, or the window
-was closed without the process dying — run **`.\stop.cmd`**. It reports what it stopped and
+If there is no window to close — it was started with `--here` by a script, or
+the window was closed without the process dying — run **`.\stop.cmd`**. It reports what it stopped and
 how much VRAM came back, and it matches on the ComfyUI command line so other Python
 programs you have running are left alone.
 
@@ -187,10 +187,11 @@ results into `DIR` with the embedded prompt stripped (`--keep-metadata` keeps it
 `--timeout` stops waiting for a result (default 900 s). `python scripts/generate.py -h` lists
 everything.
 
-`.\start.cmd --window` is how agents start it: the server opens in its own console window titled
-"local-image ComfyUI server - close this window to stop it" and the command returns at once, so a
-server is never running out of sight, and closing the window stops it. `.\start.cmd --no-browser`
-runs it in the current console without opening the page, for scripts.
+The server always opens in its own console window titled "local-image ComfyUI server - close this
+window to stop it", and `start.cmd` returns at once, so a server is never running out of sight;
+closing the window stops it. `.\start.cmd --no-browser` does the same without opening the page
+(that's how agents start it), and `.\start.cmd --here` runs it in the current console instead, for
+scripts that manage the process themselves.
 
 ### As a Claude Code skill
 
@@ -356,7 +357,7 @@ Only first-party source is tracked. Everything the installer creates is ignored,
 
 ```
 install.ps1                     one-shot setup; re-runnable
-start.cmd                       run the server, open the page (--window: in its own window)
+start.cmd                       run the server in its own window, open the page
 stop.cmd                        stop it when there is no window to close
 SKILL.md                        Claude Code skill: generate, check and iterate
 models.json                     weight manifest: URLs, sizes, SHA256

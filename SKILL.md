@@ -84,12 +84,12 @@ If ComfyUI is already up and the card is full, that's this server, and it's fine
 **Start the server in its own window:**
 
 ```bash
-cmd //c "$(cygpath -w ~/.claude/skills/local-image/start.cmd)" --window
+cmd //c "$(cygpath -w ~/.claude/skills/local-image/start.cmd)" --no-browser
 ```
 
-This returns at once and opens a visible console window titled "local-image ComfyUI server -
-close this window to stop it", so the user can see it's running and stop it by closing the
-window. Always start it this way, never hidden in the background, and tell the user the window is
+`start.cmd` always opens the server in a visible console window titled "local-image ComfyUI
+server - close this window to stop it" and returns at once, so the user can see it's running and
+stop it by closing the window; `--no-browser` skips opening the page. Tell the user the window is
 theirs to close. The window shows the address, one line per image job and any errors; everything
 the server prints goes to `~/.claude/skills/local-image/logs/server.log` (the previous run is
 `server.previous.log`): **if the server doesn't come up, read the end of that log** rather than
