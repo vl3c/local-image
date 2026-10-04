@@ -123,3 +123,4 @@ extra_model_paths.yaml
 .DS_Store
 Thumbs.db
 desktop.ini
+logs/

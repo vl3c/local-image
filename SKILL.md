@@ -81,11 +81,19 @@ from somewhere else: tell the user rather than killing it.
 Anything else holding several GB (a game, another ComfyUI): tell the user rather than killing it.
 If ComfyUI is already up and the card is full, that's this server, and it's fine.
 
-**Start the server** in the background (run_in_background), without opening a browser:
+**Start the server in its own window:**
 
 ```bash
-cmd //c "<base dir>\\start.cmd" --no-browser
+cmd //c "$(cygpath -w ~/.claude/skills/local-image/start.cmd)" --no-browser
 ```
+
+`start.cmd` always opens the server in a visible console window titled "local-image ComfyUI
+server - close this window to stop it" and returns at once, so the user can see it's running and
+stop it by closing the window; `--no-browser` skips opening the page. Tell the user the window is
+theirs to close. The window shows the address, one line per image job and any errors; everything
+the server prints goes to `~/.claude/skills/local-image/logs/server.log` (the previous run is
+`server.previous.log`): **if the server doesn't come up, read the end of that log** rather than
+retrying blindly.
 
 It binds in a few seconds. The first generation afterwards also loads ~17 GB of weights. The
 `--wait` flag below covers the startup, so you can start the server and generate right away.
@@ -205,5 +213,5 @@ It stops both ComfyUI processes (a launcher and the real server) and reports the
 Don't restart the local-agent server yourself unless the user asks.
 
 The user can also use the tool by hand at `http://127.0.0.1:8188/simple`: a prompt box with
-reference images, presets and an *Edit this* button on every result. Running `start.cmd` without
-`--no-browser` opens that page.
+reference images, presets and an *Edit this* button on every result. Running `start.cmd` with no
+arguments opens that page.
