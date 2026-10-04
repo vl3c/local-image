@@ -135,7 +135,10 @@ default browser once it is actually ready. (A minimized helper window polls the 
 closes itself; a cold start takes about half a minute because ~17 GB of weights have to
 load, which is why it waits rather than guessing a delay.)
 
-Leave the main console window open — that is the server.
+Leave the main console window open — that is the server. It shows the address, one line per
+image job and any errors; everything ComfyUI prints goes to `logs\server.log`, timestamped, with
+the previous run kept as `logs\server.previous.log` (`scripts\logtee.py` does this). `logs\` is
+gitignored.
 
 If you installed ComfyUI elsewhere, pass the path: `.\start.cmd D:\ai\ComfyUI`
 
@@ -184,7 +187,10 @@ results into `DIR` with the embedded prompt stripped (`--keep-metadata` keeps it
 `--timeout` stops waiting for a result (default 900 s). `python scripts/generate.py -h` lists
 everything.
 
-`.\start.cmd --no-browser` starts the server without opening the page, for scripts.
+`.\start.cmd --window` is how agents start it: the server opens in its own console window titled
+"local-image ComfyUI server - close this window to stop it" and the command returns at once, so a
+server is never running out of sight, and closing the window stops it. `.\start.cmd --no-browser`
+runs it in the current console without opening the page, for scripts.
 
 ### As a Claude Code skill
 
@@ -350,12 +356,13 @@ Only first-party source is tracked. Everything the installer creates is ignored,
 
 ```
 install.ps1                     one-shot setup; re-runnable
-start.cmd                       run the server, open the page
+start.cmd                       run the server, open the page (--window: in its own window)
 stop.cmd                        stop it when there is no window to close
 SKILL.md                        Claude Code skill: generate, check and iterate
 models.json                     weight manifest: URLs, sizes, SHA256
 custom_nodes/qwen_simple_ui.py  the /simple page and one helper node
 scripts/generate.py             CLI: generate, edit, enhance
+scripts/logtee.py               log the server's output; show only what matters in its window
 scripts/download_models.py      resumable, checksum-verified downloader
 scripts/check_repo_safe.py      pre-publish guard
 PRIVACY.md                      network-egress audit
