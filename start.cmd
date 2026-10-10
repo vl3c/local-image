@@ -12,6 +12,9 @@ rem The server always opens in its own console window and start.cmd returns at o
 rem is never running out of sight; closing the window stops it. The window shows the
 rem address, one line per image job and any errors; everything the server prints goes to
 rem logs\server.log (the previous run: logs\server.previous.log).
+rem
+rem The port is 8188, ComfyUI's usual one. To use another, set LOCAL_IMAGE_PORT before
+rem running this; scripts\generate.py reads the same variable.
 setlocal
 cd /d "%~dp0"
 rem Captured before the argument loop, which shifts the arguments.
@@ -36,6 +39,8 @@ echo Too many arguments. Use:  start.cmd [--no-browser] [--here] [path to ComfyU
 exit /b 2
 :argsdone
 if not defined COMFY set "COMFY=%HERE_DIR%ComfyUI"
+if not defined LOCAL_IMAGE_PORT set "LOCAL_IMAGE_PORT=8188"
+set "URL=http://127.0.0.1:%LOCAL_IMAGE_PORT%/simple"
 
 if not exist "%COMFY%\.venv\Scripts\python.exe" (
   echo.
@@ -60,14 +65,20 @@ exit /b 0
 if defined INWIN (
   title local-image ComfyUI server - close this window to stop it
   echo.
-  echo   local-image ComfyUI server on http://127.0.0.1:8188/simple
+  echo   local-image ComfyUI server on %URL%
   echo   Close this window to stop it and free the GPU.
   echo.
 )
 
 rem Wait for the server to answer before opening the browser, rather than
 rem guessing a delay - a cold start has to load ~17 GB of weights.
-if defined BROWSER start "" /min cmd /c "for /l %%i in (1,1,150) do (curl.exe -s -o nul --max-time 2 http://127.0.0.1:8188/simple && (start "" http://127.0.0.1:8188/simple & exit /b) || "%WAIT%" /t 2 >nul)"
+if defined BROWSER start "" /min cmd /c "for /l %%i in (1,1,150) do (curl.exe -s -o nul --max-time 2 %URL% && (start "" %URL% & exit /b) || "%WAIT%" /t 2 >nul)"
+
+rem Comfy Kitchen attention is ~15%% faster, but its kernel needs a recent NVIDIA GPU and
+rem ComfyUI refuses to start when the flag is given without it, so ask first (~3 s).
+set "ATTN="
+"%COMFY%\.venv\Scripts\python.exe" -c "import sys, comfy_kitchen; sys.exit(0 if comfy_kitchen.int8_attention_is_available() else 1)" >nul 2>&1 && set "ATTN=--use-ck-attention"
+if not defined ATTN echo   Comfy Kitchen attention is not available on this GPU; using ComfyUI's default.
 
 rem Privacy flags - see PRIVACY.md for what each one actually does.
 rem   --listen 127.0.0.1          loopback only (this is also the default)
@@ -80,7 +91,8 @@ rem   --disable-all-custom-nodes  with the whitelist below, so only our node loa
 rem                               and a future drive-by node cannot add egress
 rem   --whitelist-custom-nodes    must include the .py extension or nothing loads
 rem Performance:
-rem   --use-ck-attention          measured ~15%% faster than pytorch attention
+rem   --use-ck-attention          measured ~15%% faster than pytorch attention, when
+rem                               the GPU supports it (probed above)
 rem
 rem It runs through scripts\logtee.py (standard library only): everything to
 rem logs\server.log, the window shows the address, one line per job and any errors.
@@ -88,13 +100,13 @@ rem logs\server.log, the window shows the address, one line per job and any erro
   --show "To see the GUI go to" --show "got prompt" --show "Prompt executed in" ^
   -- "%COMFY%\.venv\Scripts\python.exe" "%COMFY%\main.py" ^
   --listen 127.0.0.1 ^
-  --port 8188 ^
+  --port %LOCAL_IMAGE_PORT% ^
   --disable-auto-launch ^
   --disable-api-nodes ^
   --disable-manager-ui ^
   --disable-all-custom-nodes ^
   --whitelist-custom-nodes qwen_simple_ui.py ^
-  --use-ck-attention
+  %ATTN%
 
 if defined INWIN (
   echo.
