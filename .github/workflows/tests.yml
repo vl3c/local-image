@@ -1,0 +1,41 @@
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  # Cancel superseded runs on PR updates only; every push to main runs to completion.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # No GPU, no ComfyUI and no weights: generate.py is tested against a faked server and
+  # cutout.py on synthetic images. The job name is the required status check.
+  # Windows, the platform the tool targets.
+  tests:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install (what ComfyUI's environment gives cutout.py)
+        run: python -m pip install --disable-pip-version-check numpy scipy pillow
+      - name: unittest
+        run: python -m unittest discover tests -v
+      - name: Pre-publish safety scan (files and history)
+        run: |
+          git fetch --unshallow --quiet || true
+          python scripts/check_repo_safe.py --history

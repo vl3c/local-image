@@ -73,22 +73,23 @@ start; stop other tools with their own stop script, or ask the user to.
 
 If this ComfyUI is already up and the card is full, that's this server, and it's fine.
 
-**Start the server in its own window:**
+**The server always runs in its own visible window,** titled "local-image ComfyUI server - close
+this window to stop it", so the user can see it's running and stop it by closing the window.
+`generate.py` opens it for you when it isn't running (and refuses while another program holds
+more than 4 GB of the GPU: then go back to the paragraph above). To start it by hand:
 
 ```bash
 cmd //c "$(cygpath -w "<base dir>/start.cmd")" --no-browser
 ```
 
-`start.cmd` always opens the server in a visible console window titled "local-image ComfyUI
-server - close this window to stop it" and returns at once, so the user can see it's running and
-stop it by closing the window; `--no-browser` skips opening the page. Tell the user the window is
-theirs to close. The window shows the address, one line per image job and any errors; everything
+It returns at once, and does nothing if a server from this install is already running. Never run
+the server any other way. Tell the user the window is theirs to close. The window shows the address, one line per image job and any errors; everything
 the server prints goes to `<base dir>/logs/server.log` (the previous run is
 `server.previous.log`): **if the server doesn't come up, read the end of that log** rather than
 retrying blindly.
 
-It binds in a few seconds. The first generation afterwards also loads ~17 GB of weights. The
-`--wait` flag below covers the startup, so you can start the server and generate right away.
+It binds in about half a minute, which `generate.py` waits for. The first generation afterwards
+also loads ~17 GB of weights.
 
 **If `ComfyUI/.venv` is missing,** the tool isn't installed. `install.ps1` downloads about 30 GB;
 ask the user before running it.
@@ -98,7 +99,7 @@ ask the user before running it.
 Run the CLI with any Python 3 (it only uses the standard library):
 
 ```bash
-python "<base dir>/scripts/generate.py" "<prompt>" --preview --count 2 --wait 120 --out <dir>
+python "<base dir>/scripts/generate.py" "<prompt>" --preview --count 2 --out <dir>
 python "<base dir>/scripts/generate.py" "<prompt>" --seed 42 --size 1664x928 --out <dir>
 python "<base dir>/scripts/generate.py" "<change>" --edit a.png [--edit b.png ...] --scale 1024 --out <dir>
 python "<base dir>/scripts/generate.py" "" --enhance keeper.png --out <dir>
@@ -118,7 +119,8 @@ python "<base dir>/scripts/generate.py" "<object>" --cutout --size 1024x1024 --p
 | `--edit IMG` | A reference image to edit. Repeat for up to 10; the output takes the first one's shape. |
 | `--scale N` | Output size when editing (default 1328). Higher is much slower. |
 | `--enhance IMG` | Refines the pixels (denoise 0.45). It can't recompose, so it's safe for a keeper. |
-| `--wait S` | Wait up to S seconds for the server to come up. |
+| `--wait S` | Wait up to S seconds for a server that is already starting, before starting one. |
+| `--no-start` | Fail if the server isn't running, rather than opening its window. |
 | `--timeout S` | Give up on the result after S seconds (default 900). The job still finishes on the server. |
 | `--out DIR` | Copy results to DIR with the prompt metadata stripped. Prints the full paths. Never overwrites: a name that already exists gets a `_1` suffix. |
 | `--keep-metadata` | With `--out`, keep the embedded prompt, seed and workflow. |
@@ -245,9 +247,10 @@ Stop it when they're done or want the GPU for something else:
 cmd //c "<base dir>\\stop.cmd"
 ```
 
-It stops this install's ComfyUI processes (a launcher and the real server), leaves any other
-ComfyUI alone, and reports the VRAM freed. Exit 0 means stopped or not running, 1 means
-something survived. Don't restart whatever you stopped earlier unless the user asks.
+It stops this install's ComfyUI processes (a launcher and the real server), closes the server's
+window, leaves any other ComfyUI alone, and reports the VRAM freed. Exit 0 means stopped or not
+running, 1 means something survived. Never stop it by killing processes: the window would stay
+up showing an error. Don't restart whatever you stopped earlier unless the user asks.
 
 The user can also use the tool by hand at `http://127.0.0.1:8188/simple`: a prompt box with
 reference images, presets and an *Edit this* button on every result. Running `start.cmd` with no

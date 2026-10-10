@@ -5,13 +5,15 @@ rem
 rem   start.cmd                        default install, opens the page
 rem   start.cmd D:\ai\ComfyUI          an install somewhere else
 rem   start.cmd --no-browser [path]    don't open the page (what agents use)
-rem   start.cmd --here [path]          run in this console instead, for scripts that manage
-rem                                    the process themselves
 rem
 rem The server always opens in its own console window and start.cmd returns at once, so it
-rem is never running out of sight; closing the window stops it. The window shows the
-rem address, one line per image job and any errors; everything the server prints goes to
-rem logs\server.log (the previous run: logs\server.previous.log).
+rem is never running out of sight. Closing the window stops it and frees the GPU; so does
+rem stop.cmd, which closes the window too. If the server dies on its own, the window stays
+rem up for a minute so the error can be read. The window shows the address, one line per
+rem image job and any errors; everything the server prints goes to logs\server.log (the
+rem previous run: logs\server.previous.log).
+rem
+rem If a server from this install is already running, it doesn't start a second one.
 rem
 rem The port is 8188, ComfyUI's usual one. To use another, set LOCAL_IMAGE_PORT before
 rem running this; scripts\generate.py reads the same variable.
@@ -26,16 +28,15 @@ rem coreutils one, which doesn't understand /t.
 set "WAIT=%SystemRoot%\System32\timeout.exe"
 
 set "BROWSER=1"
-set "HERE="
 set "INWIN="
 set "COMFY="
 :args
 if "%~1"=="" goto argsdone
 if /i "%~1"=="--no-browser" (set "BROWSER=" & shift /1 & goto args)
-if /i "%~1"=="--here"       (set "HERE=1" & shift /1 & goto args)
+if /i "%~1"=="--here" (echo --here is gone: the server always runs in its own window now. & exit /b 2)
 if /i "%~1"=="--in-window"  (set "INWIN=1" & shift /1 & goto args)
 if not defined COMFY (set "COMFY=%~1" & shift /1 & goto args)
-echo Too many arguments. Use:  start.cmd [--no-browser] [--here] [path to ComfyUI]
+echo Too many arguments. Use:  start.cmd [--no-browser] [path to ComfyUI]
 exit /b 2
 :argsdone
 if not defined COMFY set "COMFY=%HERE_DIR%ComfyUI"
@@ -51,24 +52,29 @@ if not exist "%COMFY%\.venv\Scripts\python.exe" (
   exit /b 1
 )
 
-rem By default, relaunch in a new, visible console and return immediately, so the server is
-rem always on screen and closing its window shuts it down (Windows ends every process
-rem attached to a console when the console closes).
-if defined HERE goto run
+rem Relaunch in a new, visible console and return immediately, so the server is always on
+rem screen and closing its window shuts it down (Windows ends every process attached to a
+rem console when the console closes).
 if defined INWIN goto run
+
+rem One server per install: the GPU only holds one, and a second window would only confuse.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%HERE_DIR%scripts\stop.ps1" -Running "%COMFY%" >nul 2>&1
+if not errorlevel 1 (
+  echo A local-image server from this install is already running: look for its window.
+  if defined BROWSER start "" %URL%
+  exit /b 0
+)
 set "PASS="
 if not defined BROWSER set "PASS=--no-browser"
 start "local-image ComfyUI server - close this window to stop it" cmd /c ""%SELF%" --in-window %PASS% "%COMFY%""
 exit /b 0
 
 :run
-if defined INWIN (
-  title local-image ComfyUI server - close this window to stop it
-  echo.
-  echo   local-image ComfyUI server on %URL%
-  echo   Close this window to stop it and free the GPU.
-  echo.
-)
+title local-image ComfyUI server - close this window to stop it
+echo.
+echo   local-image ComfyUI server on %URL%
+echo   Close this window (or run stop.cmd) to stop it and free the GPU.
+echo.
 
 rem Wait for the server to answer before opening the browser, rather than
 rem guessing a delay - a cold start has to load ~17 GB of weights.
@@ -108,11 +114,12 @@ rem logs\server.log, the window shows the address, one line per job and any erro
   --whitelist-custom-nodes qwen_simple_ui.py ^
   %ATTN%
 
-if defined INWIN (
-  echo.
-  echo   The server has stopped. This window closes in 60 seconds;
-  echo   press a key to close it now.
-  "%WAIT%" /t 60 >nul
-)
-
-endlocal
+rem stop.cmd leaves this marker while it stops us: close the window at once, and with a
+rem clean exit, so Windows Terminal closes the tab too. Otherwise the server died on its own,
+rem so keep the window up long enough to read why.
+if exist "%HERE_DIR%logs\stop-requested" exit /b 0
+echo.
+echo   The server has stopped on its own; the reason is above and in logs\server.log.
+echo   This window closes in 60 seconds; press a key to close it now.
+"%WAIT%" /t 60 >nul
+exit /b 0

@@ -144,6 +144,11 @@ default browser once it is actually ready. (A minimized helper window polls the 
 closes itself; a cold start takes about half a minute because ~17 GB of weights have to
 load, which is why it waits rather than guessing a delay.)
 
+The server always runs in its own console window, titled "local-image ComfyUI server - close
+this window to stop it", whoever starts it: `start.cmd`, `scripts\generate.py` (which starts it
+for you if it isn't running) or an agent. So it is never running out of sight, and there is only
+ever one per install: starting again while it runs just says so.
+
 Leave the server's window open while you use it. It shows the address, one line per
 image job and any errors; everything ComfyUI prints goes to `logs\server.log`, timestamped, with
 the previous run kept as `logs\server.previous.log` (`scripts\logtee.py` does this). `logs\` is
@@ -173,13 +178,17 @@ Results stack newest-first with **Full quality**, **Enhance**, **Edit this** and
 
 ### Stopping it
 
-Close the `start.cmd` console window. That is the whole answer.
+Close the server's console window. That stops every process the server runs and gives the
+GPU back.
 
-If there is no window to close — it was started with `--here` by a script, or
-the window was closed without the process dying — run **`.\stop.cmd`**. It reports what it stopped and
-how much VRAM came back. It only stops the server started from *this* install: it matches the
-path of this install's `main.py`, so another ComfyUI or any other Python program you run is left
-alone. It exits 0 when the server is stopped (or wasn't running) and 1 if anything survived.
+Or run **`.\stop.cmd`**, from a script or when the window is out of reach: it stops the server,
+its window closes by itself, and it reports how much VRAM came back. It only stops the server
+started from *this* install: it matches the path of this install's `main.py`, so another ComfyUI
+or any other Python program you run is left alone. It exits 0 when the server is stopped (or
+wasn't running) and 1 if anything survived.
+
+If the server dies on its own, its window stays up for a minute with the error, so you can read
+why; `logs\server.log` has the rest.
 
 To give the GPU back for a while without stopping the server, ask it to unload the models:
 `curl -X POST -H "Content-Type: application/json" -d "{\"unload_models\": true, \"free_memory\": true}" http://127.0.0.1:8188/free`.
@@ -198,12 +207,15 @@ python scripts/generate.py "a neon sign reading OPEN LATE, rainy night"
 python scripts/generate.py "a lighthouse at dawn" --size 1664x928 --seed 42 --preview
 python scripts/generate.py "make the sky stormy" --edit photo.png
 python scripts/generate.py "..." --enhance output/qwen21_00003_.png
-python scripts/generate.py "a lighthouse" --wait 120 --out renders
+python scripts/generate.py "a lighthouse" --out renders
 python scripts/generate.py "a foggy city at night" --fit 1920x1080 --out plates
 python scripts/generate.py "a raised fist" --cutout --size 1024x1024 --out shapes
 ```
 
-Needs the server running; `--wait 120` waits for one that is still starting. Sizes must be
+If the server isn't running, `generate.py` starts it in its window (as `start.cmd --no-browser`)
+and waits for it; close the window or run `stop.cmd` when you're done. It won't, and says why,
+when another program already holds more than 4 GB of the GPU, since this needs about 15.5 GB;
+`--no-start` makes it fail instead of starting anything. Sizes must be
 multiples of 16; `--size` is ignored when editing (use `--scale`). `--out DIR` copies the
 results into `DIR` with the embedded prompt stripped (`--keep-metadata` keeps it), and
 `--timeout` stops waiting for a result (default 900 s). `python scripts/generate.py -h` lists
@@ -256,11 +268,8 @@ enough all stay. To adjust, run
 It warns when the object touches the frame (probably cropped), when the background isn't
 plain, and when `--keep` drops a large part. It works on any image you already have, too.
 
-The server always opens in its own console window titled "local-image ComfyUI server - close this
-window to stop it", and `start.cmd` returns at once, so a server is never running out of sight;
-closing the window stops it. `.\start.cmd --no-browser` does the same without opening the page
-(that's how agents start it), and `.\start.cmd --here` runs it in the current console instead, for
-scripts that manage the process themselves.
+`start.cmd` opens the server window and returns at once. `.\start.cmd --no-browser` does the same
+without opening the page.
 
 ### As a Claude Code skill
 

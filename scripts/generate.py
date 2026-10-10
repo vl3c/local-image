@@ -1,12 +1,14 @@
 """Command-line front end for the same pipeline the web page drives.
 
-The server must already be running (start.cmd). Everything stays on localhost.
+If the server isn't running, this starts it with start.cmd, in its own visible window:
+close that window, or run stop.cmd, to stop it and free the GPU. It won't start it while
+another program holds a large share of the GPU. Everything stays on localhost.
 
     python scripts/generate.py "a lighthouse at dawn"
     python scripts/generate.py "neon sign reading OPEN LATE" --size 1664x928 --seed 42
     python scripts/generate.py "make the sky stormy" --edit photo.png
     python scripts/generate.py "" --enhance output/qwen21_00003_.png
-    python scripts/generate.py "a lighthouse" --wait 120 --out some/dir
+    python scripts/generate.py "a lighthouse" --out some/dir
     python scripts/generate.py "a foggy city at night" --fit 1920x1080 --out plates
     python scripts/generate.py "a raised fist" --cutout --size 1024x1024 --out shapes
 
@@ -60,6 +62,11 @@ ENHANCE_DENOISE = 0.45
 FIT_MIN_PIXELS = 1024 * 1024
 FIT_MAX_PIXELS = 2048 * 1152
 
+# Starting the server for you: it needs ~15.5 GB of VRAM, so don't when something else
+# already holds more than this; and allow a cold start this long to answer.
+OTHER_GPU_MB = 4096
+START_WAIT = 180
+
 HTTP_TIMEOUT = 60  # per request; a single call only blocks this long, whatever --timeout says
 # What a server that is starting, stopping or gone raises: OSError covers URLError,
 # refused and reset connections and socket timeouts; the rest are half-sent answers.
@@ -107,6 +114,25 @@ def wait_for_server(seconds: float) -> bool:
             if time.time() >= deadline:
                 return False
             time.sleep(2)
+
+
+def start_server() -> str | None:
+    """Open the server in its own visible window with start.cmd. Returns why not, or None."""
+    if not (REPO / "ComfyUI" / ".venv" / "Scripts" / "python.exe").is_file():
+        return (f"there is no install at {REPO / 'ComfyUI'}. Run install.ps1, or start.cmd "
+                "with the path to your ComfyUI")
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
+                             capture_output=True, text=True, timeout=20).stdout
+        used = int(out.split()[0])
+    except (OSError, ValueError, IndexError, subprocess.SubprocessError):
+        used = 0  # no nvidia-smi to ask: let the server find out
+    if used > OTHER_GPU_MB:
+        return (f"another program holds {used / 1024:.1f} GB of the GPU, and this needs about "
+                "15.5 GB. Stop it first (nvidia-smi shows what), then run this again")
+    # start.cmd opens the window and returns at once; it won't open a second one.
+    subprocess.run(["cmd", "/c", str(REPO / "start.cmd"), "--no-browser"], check=False)
+    return None
 
 
 def strip_png_text(data: bytes) -> bytes:
@@ -259,7 +285,9 @@ def main() -> int:
     ap.add_argument("--model", default=DIFFUSION)
     ap.add_argument("--encoder", default=ENCODER)
     ap.add_argument("--wait", type=float, default=0, metavar="SECONDS",
-                    help="wait this long for the server to come up (default: fail at once)")
+                    help="wait this long for a server that is already starting (default 0)")
+    ap.add_argument("--no-start", action="store_true",
+                    help="fail if the server isn't running, rather than starting it in its window")
     ap.add_argument("--timeout", type=float, default=900, metavar="SECONDS",
                     help="give up waiting for the result after this long (default 900)")
     ap.add_argument("--out", type=Path, metavar="DIR",
@@ -311,8 +339,18 @@ def main() -> int:
         args.seed = random.randrange(2**32)
 
     if not wait_for_server(args.wait):
-        print(f"No server at {SERVER}. Start it with start.cmd first.")
-        return 1
+        if args.no_start:
+            print(f"No server at {SERVER}. Start it with start.cmd first.")
+            return 1
+        why = start_server()
+        if why:
+            print(f"No server at {SERVER}, and not starting one: {why}.")
+            return 1
+        print("Started the server in its own window (\"local-image ComfyUI server\"). Close that "
+              "window, or run stop.cmd, to stop it and free the GPU.", flush=True)
+        if not wait_for_server(START_WAIT):
+            print(f"The server didn't answer within {START_WAIT}s; the end of logs/server.log says why.")
+            return 1
 
     try:
         refs = [upload(Path(p)) for p in args.edit]
