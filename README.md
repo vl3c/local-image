@@ -7,11 +7,16 @@ node-graph interface with a single page that is just a prompt box and a button. 
 accounts, no cloud, no node wiring. Your prompts and images never leave the machine.
 
 ```powershell
-git clone https://github.com/YOUR-USERNAME/local-image.git
+git clone https://github.com/vl3c/local-image.git
 cd local-image
 powershell -ExecutionPolicy Bypass -File .\install.ps1   # ~30 GB, mostly weights
 .\start.cmd                                              # opens the page for you
 ```
+
+> **Before you use it:** the code here is MIT, but the model it downloads is licensed for
+> **research and evaluation only**. Trying it out and testing it are fine; client work,
+> selling images or using them in a product or monetised content needs a separate
+> commercial licence from Qwen. See [Licensing](#licensing).
 
 **Contents** — [What it does](#what-it-does) · [Requirements](#requirements) ·
 [Install](#install) · [Using it](#using-it) · [Writing prompts](#writing-prompts) ·
@@ -28,6 +33,10 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1   # ~30 GB, mostly weight
 - **Iterate** — every result has an *Edit this* button, so edits chain.
 - **Preview → commit** — a fast 20-step draft, then re-render the keeper at full quality.
 - **Enhance** — refine an image's actual pixels when the composition must not move.
+- **Exact delivery sizes** (command line) — `--fit 1920x1080` renders near the target and
+  scales and crops to exactly that.
+- **Cut-outs** (command line) — one object on a real transparent background, returned as a
+  transparent PNG, a clean mask and its outline as SVG and JSON, ready to trace or composite.
 
 Qwen-Image-2.1 is unusually good at rendering *text inside images* — shop signs, labels,
 handwriting, dense captions. That is the main reason to run this one locally rather than
@@ -38,7 +47,7 @@ reaching for whatever is in a browser tab.
 | | |
 |---|---|
 | OS | Windows 10 / 11 |
-| GPU | NVIDIA. 16 GB VRAM is comfortable; 12 GB works but streams weights heavily |
+| GPU | NVIDIA, with a current driver (the default CUDA 13 build wants 580 or newer; `-CudaIndex` covers older ones). 16 GB VRAM is comfortable; 12 GB works but streams weights heavily |
 | Disk | **~30 GB free** (plus ~5 GB of pip cache elsewhere) |
 | RAM | 32 GB |
 | Software | Python 3.13 (via the `py` launcher) and Git, both on PATH |
@@ -135,12 +144,24 @@ default browser once it is actually ready. (A minimized helper window polls the 
 closes itself; a cold start takes about half a minute because ~17 GB of weights have to
 load, which is why it waits rather than guessing a delay.)
 
+The server always runs in its own console window, titled "local-image ComfyUI server - close
+this window to stop it", whoever starts it: `start.cmd`, `scripts\generate.py` (which starts it
+for you if it isn't running) or an agent. So it is never running out of sight, and there is only
+ever one per install: starting again while it runs just says so.
+
 Leave the server's window open while you use it. It shows the address, one line per
 image job and any errors; everything ComfyUI prints goes to `logs\server.log`, timestamped, with
 the previous run kept as `logs\server.previous.log` (`scripts\logtee.py` does this). `logs\` is
 gitignored.
 
-If you installed ComfyUI elsewhere, pass the path: `.\start.cmd D:\ai\ComfyUI`
+If you installed ComfyUI elsewhere (`install.ps1 -ComfyUI D:\ai\ComfyUI`), set
+`LOCAL_IMAGE_COMFYUI=D:\ai\ComfyUI` once in your user environment: `start.cmd`, `stop.cmd`
+and `scripts\generate.py` all read it. Passing the path works too: `.\start.cmd D:\ai\ComfyUI`,
+and the same to `.\stop.cmd`.
+
+The server listens on `127.0.0.1:8188`, ComfyUI's usual port. If another ComfyUI already uses
+it, set `LOCAL_IMAGE_PORT` (for example `set LOCAL_IMAGE_PORT=8189`) before `start.cmd`;
+`scripts\generate.py` reads the same variable.
 
 ### The page
 
@@ -159,12 +180,22 @@ Results stack newest-first with **Full quality**, **Enhance**, **Edit this** and
 
 ### Stopping it
 
-Close the `start.cmd` console window. That is the whole answer.
+Close the server's console window. That stops every process the server runs and gives the
+GPU back.
 
-If there is no window to close — it was started with `--here` by a script, or
-the window was closed without the process dying — run **`.\stop.cmd`**. It reports what it stopped and
-how much VRAM came back, and it matches on the ComfyUI command line so other Python
-programs you have running are left alone.
+Or run **`.\stop.cmd`**, from a script or when the window is out of reach: it stops the server,
+its window closes by itself, and it reports how much VRAM came back. It only stops the server
+started from *this* install: it matches the path of this install's `main.py`, so another ComfyUI
+or any other Python program you run is left alone. It exits 0 when the server is stopped (or
+wasn't running) and 1 if anything survived.
+
+If the server dies on its own, its window stays up for a minute with the error, so you can read
+why; `logs\server.log` has the rest.
+
+To give the GPU back for a while without stopping the server, ask it to unload the models:
+`curl -X POST -H "Content-Type: application/json" -d "{\"unload_models\": true, \"free_memory\": true}" http://127.0.0.1:8188/free`.
+That leaves about 0.4 GB in use; the next image reloads them from system RAM, about 8 s extra
+on the test machine.
 
 ComfyUI re-executes itself at startup, so a running server is always **two** python
 processes: a small launcher and the real one holding the VRAM. Ending only one in Task
@@ -178,20 +209,69 @@ python scripts/generate.py "a neon sign reading OPEN LATE, rainy night"
 python scripts/generate.py "a lighthouse at dawn" --size 1664x928 --seed 42 --preview
 python scripts/generate.py "make the sky stormy" --edit photo.png
 python scripts/generate.py "..." --enhance output/qwen21_00003_.png
-python scripts/generate.py "a lighthouse" --wait 120 --out renders
+python scripts/generate.py "a lighthouse" --out renders
+python scripts/generate.py "a foggy city at night" --fit 1920x1080 --out plates
+python scripts/generate.py "a raised fist" --cutout --size 1024x1024 --out shapes
 ```
 
-Needs the server running; `--wait 120` waits for one that is still starting. Sizes must be
+If the server isn't running, `generate.py` starts it in its window (as `start.cmd --no-browser`)
+and waits for it; close the window or run `stop.cmd` when you're done. It won't, and says why,
+when another program already holds more than 4 GB of the GPU, since this needs about 15.5 GB;
+`--no-start` makes it fail instead of starting anything. Sizes must be
 multiples of 16; `--size` is ignored when editing (use `--scale`). `--out DIR` copies the
 results into `DIR` with the embedded prompt stripped (`--keep-metadata` keeps it), and
 `--timeout` stops waiting for a result (default 900 s). `python scripts/generate.py -h` lists
 everything.
 
-The server always opens in its own console window titled "local-image ComfyUI server - close this
-window to stop it", and `start.cmd` returns at once, so a server is never running out of sight;
-closing the window stops it. `.\start.cmd --no-browser` does the same without opening the page
-(that's how agents start it), and `.\start.cmd --here` runs it in the current console instead, for
-scripts that manage the process themselves.
+**Exact sizes for video.** `--fit 1920x1080` delivers exactly 1920×1080, whatever the
+numbers. It renders at the target's aspect rounded up to multiples of 16 (1920×1088 here,
+so only 4 rows come off top and bottom), or near it within 1–2.4 megapixels for very small
+or very large targets, then scales and centre-crops to cover. It works after `--edit` and
+`--enhance` too. The result is plain RGB: the model's VAE outputs an alpha channel even for
+opaque images, and it dips slightly below fully opaque in places, which can show as faint
+see-through specks once composited. `--rgb` drops it without changing the size.
+
+**Cut-outs and silhouettes.** Qwen-Image-2.1 decodes RGBA, and it draws a *real* transparent
+background when the prompt asks for "a fully transparent background, PNG with alpha channel"
+(16 of 16 seeds in testing; plain "on a transparent background" was ignored). `--cutout` adds
+that phrasing to your prompt, for one object as a solid black silhouette (`--cutout-object`
+keeps its own colours, and works for white objects too), keeps the alpha channel, then runs
+`scripts/cutout.py` on each result and writes, next to it:
+
+| File | What it is |
+|---|---|
+| `NAME_cutout.png` | the image with the background transparent, soft edge |
+| `NAME_mask.png` | white object on black, hard edge |
+| `NAME_contour.svg` | the outline as one even-odd path, on the same pixel grid as the PNG |
+| `NAME_contour.json` | the same outline as point lists, outer loops and holes marked |
+| `NAME_check.png` | the cut-out over a checkerboard with the outline drawn in: look at this one |
+
+On a transparent render the cut follows the alpha and keeps the model's soft edge; the
+junk colour a render leaves under transparent pixels is replaced, so nothing bleeds into the
+edge when the PNG is resized. On an ordinary image with a plain background, the background
+colour is read from the image border and the threshold is chosen automatically, light or
+dark. Cleanup drops specks, fills pinholes and smooths the edge; separate parts that are big
+enough all stay. To adjust, run
+`cutout.py` again on the same image with ComfyUI's Python, which has the libraries it needs:
+
+```powershell
+.\ComfyUI\.venv\Scripts\python.exe scripts\cutout.py shapes\qwen21_00012_.png --out shapes --open 17
+```
+
+| Option | Effect |
+|---|---|
+| `--open R` | removes anything thinner than about 2R px: a rod through a fist, wires, hairs |
+| `--close R` | bridges gaps narrower than about 2R px |
+| `--keep N` | only the N largest parts (default: every part over 1% of the largest) |
+| `--fill-holes F` | fill holes up to F of the object's area (default 0.002, pinholes only; 0 keeps all, 1 fills all) |
+| `--smooth S` | edge blur in px (default 1) |
+| `--hard` | hard-edged alpha |
+
+It warns when the object touches the frame (probably cropped), when the background isn't
+plain, and when `--keep` drops a large part. It works on any image you already have, too.
+
+`start.cmd` opens the server window and returns at once. `.\start.cmd --no-browser` does the same
+without opening the page.
 
 ### As a Claude Code skill
 
@@ -260,7 +340,7 @@ want it sharper.
 
 ## Speed
 
-RTX 5080 (16 GB), int8 weights, `--use-ck-attention`, warm:
+Measured on an RTX 5080 (16 GB), int8 weights, Comfy Kitchen attention, warm:
 
 | Resolution | Preview (20 steps) | Full (40 steps) |
 |---|---|---|
@@ -279,7 +359,7 @@ Peak VRAM sits near 15.5 GB of 16.3 GB at every resolution. That is ComfyUI's me
 manager deliberately filling the card and streaming weights. Expected, not a problem.
 
 **What helped, and what didn't.** `--use-ck-attention` was worth **−15%** (11.4s → 9.7s at
-1024²) and is on by default; sage attention was equivalent. Triton alone made no measurable
+1024²); `start.cmd` turns it on whenever the GPU supports it. Sage attention was equivalent. Triton alone made no measurable
 difference. The int8 text encoder showed **no adherence gain** over the 4-bit one — both
 handled counting, dense text and spatial negation correctly on identical seeds — so it is
 the default only because it costs ~0.3s. If VRAM is tight, install with `-AllModels` and
@@ -302,8 +382,13 @@ Left unfixed, generation runs on CPU and takes many minutes per image.
 *with* its extension — `qwen_simple_ui.py`. Without it nothing loads and the route does not
 exist.
 
-**Port 8188 already in use.** Something else is on it, most likely an earlier server that
-lost its window. Run `.\stop.cmd`.
+**Port 8188 already in use.** Most likely an earlier server that lost its window: run
+`.\stop.cmd`. If it says nothing is running, another program (often a separate ComfyUI) has
+the port; set `LOCAL_IMAGE_PORT` to another one as described in [Using it](#using-it).
+
+**The server window says Comfy Kitchen attention is not available.** Harmless: `start.cmd`
+checks whether your GPU supports that faster attention kernel and leaves it off if not.
+Generation is about 15% slower than the timings below; nothing else changes.
 
 **Out of memory, or generation crawls.** This stack wants ~15.5 GB of 16.3 GB. Another
 process holding VRAM — a local LLM, a game, a second ComfyUI — will not coexist. Stop it
@@ -345,8 +430,19 @@ Code here is **MIT** ([LICENSE](LICENSE)).
 released under the Qwen Research License, which permits use **"for research or evaluation
 purposes only"**. That is narrower than "non-commercial" usually implies. This repo
 redistributes no weights — it downloads them from HuggingFace, where that licence applies.
-Read [LICENSE-MODELS.md](LICENSE-MODELS.md), which quotes the relevant clauses, before
-relying on anything you generate.
+
+What that means in practice (a plain reading, not legal advice):
+
+| | |
+|---|---|
+| **Fine** | Trying the model, testing and comparing it, research, learning how it works |
+| **Needs a commercial licence from Qwen** | Client or paid work, selling images, using them in a product, an ad or monetised content |
+| **Unclear** | Personal creative projects you publish, even unpaid: neither clearly research nor clearly commercial |
+
+The licence limits how you *use the model*, so what is restricted is generating for a
+commercial purpose. It does not separately claim ownership of the images.
+[LICENSE-MODELS.md](LICENSE-MODELS.md) quotes the relevant clauses; read it before relying
+on anything you generate.
 
 ComfyUI is GPL-3.0 and is cloned at install time, not vendored here.
 
@@ -358,16 +454,18 @@ Only first-party source is tracked. Everything the installer creates is ignored,
 ```
 install.ps1                     one-shot setup; re-runnable
 start.cmd                       run the server in its own window, open the page
-stop.cmd                        stop it when there is no window to close
+stop.cmd                        stop it when there is no window to close (scripts/stop.ps1)
 SKILL.md                        Claude Code skill: generate, check and iterate
 models.json                     weight manifest: URLs, sizes, SHA256
 custom_nodes/qwen_simple_ui.py  the /simple page and one helper node
-scripts/generate.py             CLI: generate, edit, enhance
+scripts/generate.py             CLI: generate, edit, enhance, --fit, --cutout
+scripts/cutout.py               cut an object out along its alpha or a plain background: mask, PNG, outline
 scripts/logtee.py               log the server's output; show only what matters in its window
 scripts/download_models.py      resumable, checksum-verified downloader
 scripts/check_repo_safe.py      pre-publish guard
 PRIVACY.md                      network-egress audit
 LICENSE-MODELS.md               what the weights actually permit
+tests/                          cutout.py tests: ComfyUI's python -m unittest discover tests
 ```
 
 ## Notes for anyone extending this

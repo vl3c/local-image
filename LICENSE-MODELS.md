@@ -68,7 +68,19 @@ None are redistributed here.
 
 ## Your generated images
 
-Governed by the Qwen agreement above, not by this repo's MIT licence.
+Not covered by this repo's MIT licence. The Qwen agreement does not define "outputs" or
+claim ownership of them; what it restricts is *using the Materials*, and generating an
+image is using them. So the research-or-evaluation limit applies to the act of
+generating: making images for a commercial purpose is outside the grant, whatever you
+later do with the files. §4.b above also reaches outputs used to train another model.
+
+In plain terms:
+
+- **Fine:** trying the model, testing and comparing it, research, learning how it works.
+- **Needs a commercial licence:** client or paid work, selling images, using them in a
+  product, an ad or monetised content.
+- **Unclear:** personal creative work you publish, even unpaid. It is neither clearly
+  research nor clearly commercial.
 
 Note also that saved PNGs embed the prompt, seed and parent image by default. Useful for
 reproducing your own work; worth knowing before you share the files. See PRIVACY.md for
