@@ -20,7 +20,7 @@ the nearest size the model takes and then scales and centre-crops to cover the
 target (1920x1080 renders at 1920x1088 and loses 4 rows top and bottom). It works
 after edits and enhances too, and the result is plain RGB.
 
---cutout asks for one object as a solid black silhouette (or, with --cutout object, in its
+--cutout asks for one object as a solid black silhouette (or, with --cutout-object, in its
 own colours) on a transparent background, which this model really draws as alpha, then
 runs scripts/cutout.py on each result: a transparent PNG, a clean mask, the outline as SVG
 and JSON, and a check image. The alpha channel is kept, even with --fit. Rerun cutout.py
@@ -118,9 +118,19 @@ def wait_for_server(seconds: float) -> bool:
 
 def start_server() -> str | None:
     """Open the server in its own visible window with start.cmd. Returns why not, or None."""
-    if not (REPO / "ComfyUI" / ".venv" / "Scripts" / "python.exe").is_file():
-        return (f"there is no install at {REPO / 'ComfyUI'}. Run install.ps1, or start.cmd "
-                "with the path to your ComfyUI")
+    if not (COMFYUI / ".venv" / "Scripts" / "python.exe").is_file():
+        return (f"there is no install at {COMFYUI}. Run install.ps1, or set LOCAL_IMAGE_COMFYUI "
+                "to where your ComfyUI is")
+    # Already running from this install, just not answering yet (or on another port)? Then
+    # the VRAM it holds is ours, and there's nothing to start.
+    try:
+        running = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+                                  str(REPO / "scripts" / "stop.ps1"), "-Running", str(COMFYUI)],
+                                 capture_output=True, timeout=60).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        running = False
+    if running:
+        return None
     try:
         out = subprocess.run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
                              capture_output=True, text=True, timeout=20).stdout
@@ -130,8 +140,11 @@ def start_server() -> str | None:
     if used > OTHER_GPU_MB:
         return (f"another program holds {used / 1024:.1f} GB of the GPU, and this needs about "
                 "15.5 GB. Stop it first (nvidia-smi shows what), then run this again")
-    # start.cmd opens the window and returns at once; it won't open a second one.
-    subprocess.run(["cmd", "/c", str(REPO / "start.cmd"), "--no-browser"], check=False)
+    # start.cmd opens the window and returns at once; it won't open a second one. No handles
+    # of ours go with it: the window would inherit our stdout and hold it open for as long
+    # as the server runs, so whoever reads our output (a pipe, an agent) would never finish.
+    subprocess.run(["cmd", "/c", str(REPO / "start.cmd"), "--no-browser"], check=False,
+                   stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return None
 
 
@@ -170,6 +183,9 @@ def fetch(img: dict, out_dir: Path, keep_metadata: bool) -> Path:
 
 
 REPO = Path(__file__).resolve().parent.parent
+# The ComfyUI install, for starting the server and for cutout.py's Python. start.cmd and
+# stop.cmd read the same variable; install.ps1 -ComfyUI puts it elsewhere.
+COMFYUI = Path(os.environ.get("LOCAL_IMAGE_COMFYUI") or REPO / "ComfyUI")
 
 # What --cutout adds to the prompt. The model's VAE is RGBA and it draws real alpha for
 # this phrasing (16 of 16 seeds in testing; plain "on a transparent background" was
@@ -185,7 +201,7 @@ CUTOUT_PROMPTS = {
 
 def run_cutout(images: list[Path], out_dir: Path) -> bool:
     """scripts/cutout.py needs numpy, scipy and Pillow: ComfyUI's own Python has them."""
-    venv = REPO / "ComfyUI" / ".venv" / "Scripts" / "python.exe"
+    venv = COMFYUI / ".venv" / "Scripts" / "python.exe"
     python = str(venv) if venv.is_file() else sys.executable
     print("cutout:", flush=True)  # or a piped stdout prints the child's lines first
     r = subprocess.run([python, str(REPO / "scripts" / "cutout.py"), *map(str, images), "--out", str(out_dir)])
@@ -268,9 +284,12 @@ def main() -> int:
     ap.add_argument("--size", default=None, help="WxH, multiples of 16 (default 1328x1328)")
     ap.add_argument("--fit", metavar="WxH",
                     help="deliver exactly WxH (e.g. 1920x1080): render near it, then scale and centre-crop; implies --rgb")
-    ap.add_argument("--cutout", nargs="?", const="silhouette", choices=sorted(CUTOUT_PROMPTS),
-                    help="one object on a transparent background, then cut out with scripts/cutout.py "
-                         "(default silhouette: solid black; 'object' keeps its colours); needs --out")
+    # Two flags rather than an optional value, which would swallow a prompt written after it.
+    ap.add_argument("--cutout", action="store_const", const="silhouette",
+                    help="one object as a black silhouette on a transparent background, then cut out "
+                         "with scripts/cutout.py; needs --out")
+    ap.add_argument("--cutout-object", dest="cutout", action="store_const", const="object",
+                    help="like --cutout, but the object keeps its own colours")
     ap.add_argument("--rgb", action="store_true",
                     help="save plain RGB, dropping the model's near-opaque alpha channel")
     ap.add_argument("--seed", type=int, default=None, help="default random; reuse to reproduce")
@@ -349,7 +368,9 @@ def main() -> int:
         print("Started the server in its own window (\"local-image ComfyUI server\"). Close that "
               "window, or run stop.cmd, to stop it and free the GPU.", flush=True)
         if not wait_for_server(START_WAIT):
-            print(f"The server didn't answer within {START_WAIT}s; the end of logs/server.log says why.")
+            print(f"No answer at {SERVER} within {START_WAIT}s. If a server from this install is running "
+                  "on another port, set LOCAL_IMAGE_PORT to match; otherwise the end of "
+                  "logs/server.log says why.")
             return 1
 
     try:

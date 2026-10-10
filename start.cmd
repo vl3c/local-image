@@ -16,7 +16,8 @@ rem
 rem If a server from this install is already running, it doesn't start a second one.
 rem
 rem The port is 8188, ComfyUI's usual one. To use another, set LOCAL_IMAGE_PORT before
-rem running this; scripts\generate.py reads the same variable.
+rem running this; scripts\generate.py reads the same variable. LOCAL_IMAGE_COMFYUI, if set, is
+rem the install to use when no path is given (stop.cmd and generate.py read it too).
 setlocal
 cd /d "%~dp0"
 rem Captured before the argument loop, which shifts the arguments.
@@ -39,6 +40,7 @@ if not defined COMFY (set "COMFY=%~1" & shift /1 & goto args)
 echo Too many arguments. Use:  start.cmd [--no-browser] [path to ComfyUI]
 exit /b 2
 :argsdone
+if not defined COMFY if defined LOCAL_IMAGE_COMFYUI set "COMFY=%LOCAL_IMAGE_COMFYUI%"
 if not defined COMFY set "COMFY=%HERE_DIR%ComfyUI"
 if not defined LOCAL_IMAGE_PORT set "LOCAL_IMAGE_PORT=8188"
 set "URL=http://127.0.0.1:%LOCAL_IMAGE_PORT%/simple"
@@ -64,6 +66,9 @@ if not errorlevel 1 (
   if defined BROWSER start "" %URL%
   exit /b 0
 )
+rem A marker left by an interrupted stop.cmd would make a later crash close the window
+rem before its error can be read.
+del "%HERE_DIR%logs\stop-requested" >nul 2>&1
 set "PASS="
 if not defined BROWSER set "PASS=--no-browser"
 start "local-image ComfyUI server - close this window to stop it" cmd /c ""%SELF%" --in-window %PASS% "%COMFY%""

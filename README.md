@@ -154,8 +154,10 @@ image job and any errors; everything ComfyUI prints goes to `logs\server.log`, t
 the previous run kept as `logs\server.previous.log` (`scripts\logtee.py` does this). `logs\` is
 gitignored.
 
-If you installed ComfyUI elsewhere, pass the path: `.\start.cmd D:\ai\ComfyUI` (and the same
-to `.\stop.cmd`).
+If you installed ComfyUI elsewhere (`install.ps1 -ComfyUI D:\ai\ComfyUI`), set
+`LOCAL_IMAGE_COMFYUI=D:\ai\ComfyUI` once in your user environment: `start.cmd`, `stop.cmd`
+and `scripts\generate.py` all read it. Passing the path works too: `.\start.cmd D:\ai\ComfyUI`,
+and the same to `.\stop.cmd`.
 
 The server listens on `127.0.0.1:8188`, ComfyUI's usual port. If another ComfyUI already uses
 it, set `LOCAL_IMAGE_PORT` (for example `set LOCAL_IMAGE_PORT=8189`) before `start.cmd`;
@@ -232,7 +234,7 @@ see-through specks once composited. `--rgb` drops it without changing the size.
 **Cut-outs and silhouettes.** Qwen-Image-2.1 decodes RGBA, and it draws a *real* transparent
 background when the prompt asks for "a fully transparent background, PNG with alpha channel"
 (16 of 16 seeds in testing; plain "on a transparent background" was ignored). `--cutout` adds
-that phrasing to your prompt, for one object as a solid black silhouette (`--cutout object`
+that phrasing to your prompt, for one object as a solid black silhouette (`--cutout-object`
 keeps its own colours, and works for white objects too), keeps the alpha channel, then runs
 `scripts/cutout.py` on each result and writes, next to it:
 

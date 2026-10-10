@@ -331,9 +331,10 @@ def process(path: Path, args) -> bool:
     # the edge as soon as anything resizes or filters the image without premultiplying.
     rgb_arr = np.asarray(img.convert("RGB")).copy()
     solid = alpha >= 0.5
-    _, (iy, ix) = ndimage.distance_transform_edt(~solid, return_indices=True)
-    clear = alpha < 1 / 255
-    rgb_arr[clear] = rgb_arr[iy[clear], ix[clear]]
+    if solid.any():  # a hair-thin object can end up with no fully solid pixel to copy from
+        _, (iy, ix) = ndimage.distance_transform_edt(~solid, return_indices=True)
+        clear = alpha < 1 / 255
+        rgb_arr[clear] = rgb_arr[iy[clear], ix[clear]]
     rgb = Image.fromarray(rgb_arr)
 
     out, stem = args.out, path.stem.rstrip("_") or path.stem  # ComfyUI names end in "_"

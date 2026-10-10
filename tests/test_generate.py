@@ -124,8 +124,12 @@ class Arguments(unittest.TestCase):
         self.assertIn("30", wf)
         self.assertNotIn("31", wf, "--cutout must not drop the alpha")
 
+    def test_prompt_after_the_cutout_flag(self):
+        wf = self.submitted("--cutout", "a raised fist", "--out", "d")
+        self.assertTrue(wf["4"]["inputs"]["prompt"].startswith("a raised fist. Shown as"))
+
     def test_cutout_object_mode(self):
-        wf = self.submitted("a teacup", "--cutout", "object", "--out", "d")
+        wf = self.submitted("a teacup", "--cutout-object", "--out", "d")
         self.assertIn("One single object", wf["4"]["inputs"]["prompt"])
 
 
@@ -155,21 +159,39 @@ class Starting(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("not starting one: the GPU is busy", text)
 
-    def gpu(self, used_mb):
-        return subprocess.CompletedProcess([], 0, stdout=f"{used_mb}\n", stderr="")
+    def fake_run(self, used_mb, running=False):
+        """subprocess.run as start_server sees it: stop.ps1 -Running, nvidia-smi, start.cmd."""
+        def run(cmd, **kw):
+            if cmd[0] == "powershell":
+                return subprocess.CompletedProcess(cmd, 0 if running else 1)
+            if cmd[0] == "nvidia-smi":
+                return subprocess.CompletedProcess(cmd, 0, stdout=f"{used_mb}\n", stderr="")
+            return subprocess.CompletedProcess(cmd, 0)
+        return mock.patch.object(generate.subprocess, "run", side_effect=run)
+
+    def started(self, run):
+        return [c.args[0] for c in run.call_args_list if c.args[0][0] == "cmd"]
 
     def test_busy_gpu_means_no_start(self):
-        with mock.patch.object(generate.Path, "is_file", return_value=True), \
-                mock.patch.object(generate.subprocess, "run", return_value=self.gpu(10400)) as run:
+        with mock.patch.object(generate.Path, "is_file", return_value=True), self.fake_run(10400) as run:
             why = generate.start_server()
         self.assertIn("10.2 GB", why)
-        self.assertEqual(run.call_count, 1, "only nvidia-smi should have run, not start.cmd")
+        self.assertEqual(self.started(run), [], "start.cmd must not run")
+
+    def test_our_own_server_is_not_another_program(self):
+        # running from this install but not answering yet: its VRAM is ours, nothing to start
+        with mock.patch.object(generate.Path, "is_file", return_value=True), \
+                self.fake_run(15000, running=True) as run:
+            self.assertIsNone(generate.start_server())
+        self.assertEqual(self.started(run), [])
 
     def test_free_gpu_runs_start_cmd(self):
-        with mock.patch.object(generate.Path, "is_file", return_value=True), \
-                mock.patch.object(generate.subprocess, "run", return_value=self.gpu(1700)) as run:
+        with mock.patch.object(generate.Path, "is_file", return_value=True), self.fake_run(1700) as run:
             self.assertIsNone(generate.start_server())
-        cmd = run.call_args_list[-1].args[0]
+        (cmd,) = self.started(run)
+        kw = run.call_args_list[-1].kwargs
+        self.assertEqual({kw.get(k) for k in ("stdin", "stdout", "stderr")}, {subprocess.DEVNULL},
+                         "the server window must not inherit our output handles")
         self.assertEqual(cmd[:2], ["cmd", "/c"])
         self.assertTrue(cmd[2].endswith("start.cmd"))
         self.assertEqual(cmd[3:], ["--no-browser"])

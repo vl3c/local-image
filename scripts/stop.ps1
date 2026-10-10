@@ -21,7 +21,8 @@
     With -Running: 0 a server from this install is running, 1 not.
 
 .PARAMETER ComfyUI
-    The ComfyUI install the server was started from. Default: ComfyUI beside this repo.
+    The ComfyUI install the server was started from. Default: $env:LOCAL_IMAGE_COMFYUI, else
+    ComfyUI beside this repo.
 
 .PARAMETER List
     Only show which processes would be stopped.
@@ -37,6 +38,7 @@ param(
 )
 
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+if (-not $ComfyUI) { $ComfyUI = $env:LOCAL_IMAGE_COMFYUI }
 if (-not $ComfyUI) { $ComfyUI = Join-Path $RepoRoot 'ComfyUI' }
 
 # Resolve every junction or symlink along a path, segment by segment.
