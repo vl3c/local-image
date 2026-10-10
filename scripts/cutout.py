@@ -1,8 +1,9 @@
 """Cut one object out of a plain background: a clean mask, a transparent PNG and its contour.
 
-Made for silhouette work: generate "one object, dark, on a plain light background",
-then get a mask you can trace without hand cleanup. Any plain background works, light
-or dark or coloured, and an image that already has real transparency uses that.
+Made for silhouette work: get a mask you can trace without hand cleanup. An image with
+real transparency is cut along its alpha (Qwen-Image-2.1 draws one when the prompt asks for
+"a fully transparent background, PNG with alpha channel", which generate.py --cutout does).
+Otherwise any plain background works, light or dark or coloured.
 
     python scripts/cutout.py fist.png --out cut/
     python scripts/cutout.py fist.png --out cut/ --open 17         # shave off a rod up to ~32 px wide
@@ -21,9 +22,9 @@ For each image, NAME.png, it writes into --out:
     NAME_check.png     the cut-out over a checkerboard with the outline in red:
                        look at this one to judge the result
 
-How it works: the background colour is the median of the image border; every pixel's
-colour distance from it is thresholded automatically (Otsu), so faint shadows and noise
-stay background. Then the cleanup: opening and closing if asked, keep the largest part,
+How it works: with real transparency, alpha >= 50% is the object. Otherwise the background
+colour is the median of the image border, and every pixel's colour distance from it is
+thresholded automatically (Otsu), so faint shadows and noise stay background. Then the cleanup: opening and closing if asked, keep the largest part,
 drop specks (parts under 1% of the largest), fill pinholes, a light blur that rounds off
 the pixel stairs. Separate parts that are big enough all stay: an antenna the model drew
 with a gap is still part of the object, and the check image shows it. The contour is traced
@@ -77,13 +78,23 @@ def disk(radius: int) -> np.ndarray:
     return x * x + y * y <= radius * radius
 
 
-def raw_mask(img: Image.Image, notes: list[str]) -> tuple[np.ndarray, dict]:
-    """Object pixels before any cleanup, and how they were found."""
+def native_alpha(img: Image.Image) -> np.ndarray | None:
+    """The image's own alpha, 0-1, if it has real transparency.
+
+    Not the near-opaque alpha every render carries: that dips to ~230 in places but
+    never makes a background."""
     if img.mode in ("RGBA", "LA", "PA") or "transparency" in img.info:
         alpha = np.asarray(img.convert("RGBA"))[..., 3]
-        # Real transparency, not the near-opaque alpha a render carries anyway.
         if (alpha < 128).mean() > 0.01:
-            return alpha >= 128, {"source": "alpha"}
+            return alpha.astype(np.float32) / 255
+    return None
+
+
+def raw_mask(img: Image.Image, notes: list[str]) -> tuple[np.ndarray, dict]:
+    """Object pixels before any cleanup, and how they were found."""
+    alpha = native_alpha(img)
+    if alpha is not None:
+        return alpha >= 0.5, {"source": "alpha"}
 
     rgb = np.asarray(img.convert("RGB"), dtype=np.float32)
     border = border_pixels(rgb)
@@ -308,7 +319,22 @@ def process(path: Path, args) -> bool:
 
     loops = contours(field, args.simplify)
     alpha = np.clip(field, 0, 1) if not args.hard else hard.astype(np.float32)
-    rgb = img.convert("RGB")
+    native = native_alpha(img)
+    if native is not None and not args.hard:
+        # Keep the model's own soft edge where the cleanup kept the object, and the
+        # cleaned mask's inside (filled pinholes, joined gaps) fully opaque.
+        near = ndimage.binary_dilation(mask, iterations=2)
+        alpha = np.maximum(native * near, ndimage.binary_erosion(mask).astype(np.float32))
+
+    # Give fully transparent pixels the colour of the nearest solid one. Under a
+    # transparent background a render holds junk colour (often magenta) that bleeds into
+    # the edge as soon as anything resizes or filters the image without premultiplying.
+    rgb_arr = np.asarray(img.convert("RGB")).copy()
+    solid = alpha >= 0.5
+    _, (iy, ix) = ndimage.distance_transform_edt(~solid, return_indices=True)
+    clear = alpha < 1 / 255
+    rgb_arr[clear] = rgb_arr[iy[clear], ix[clear]]
+    rgb = Image.fromarray(rgb_arr)
 
     out, stem = args.out, path.stem.rstrip("_") or path.stem  # ComfyUI names end in "_"
     out.mkdir(parents=True, exist_ok=True)

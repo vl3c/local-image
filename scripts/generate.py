@@ -18,10 +18,11 @@ the nearest size the model takes and then scales and centre-crops to cover the
 target (1920x1080 renders at 1920x1088 and loses 4 rows top and bottom). It works
 after edits and enhances too, and the result is plain RGB.
 
---cutout asks for one object on a plain white background, as a solid black silhouette
-(or, with --cutout object, in its own colours), then runs scripts/cutout.py on each
-result: a transparent PNG, a clean mask, the outline as SVG and JSON, and a check image.
-Rerun cutout.py by hand on the same file to adjust the cleanup (--open, --close, ...).
+--cutout asks for one object as a solid black silhouette (or, with --cutout object, in its
+own colours) on a transparent background, which this model really draws as alpha, then
+runs scripts/cutout.py on each result: a transparent PNG, a clean mask, the outline as SVG
+and JSON, and a check image. The alpha channel is kept, even with --fit. Rerun cutout.py
+by hand on the same file to adjust the cleanup (--open, --close, ...).
 
 --out copies the results into a folder of your choosing, with the embedded
 prompt, seed and workflow stripped (the originals in ComfyUI/output keep them).
@@ -144,13 +145,15 @@ def fetch(img: dict, out_dir: Path, keep_metadata: bool) -> Path:
 
 REPO = Path(__file__).resolve().parent.parent
 
-# What --cutout adds to the prompt. Positive phrasing only: there is no negative prompt.
+# What --cutout adds to the prompt. The model's VAE is RGBA and it draws real alpha for
+# this phrasing (16 of 16 seeds in testing; plain "on a transparent background" was
+# ignored). Positive phrasing only: there is no negative prompt.
 CUTOUT_PROMPTS = {
     "silhouette": "{}. Shown as one solid, pure black silhouette with no inner detail, centred with "
-                  "clear empty margin on every side, on a plain, flat, pure white background with "
-                  "nothing else in the frame. Flat, shadowless.",
-    "object": "{}. One single object, centred with clear empty margin on every side, on a plain, "
-              "flat, pure white background with nothing else in the frame. Even, shadowless studio light.",
+                  "clear empty margin on every side, isolated on a fully transparent background, "
+                  "PNG with alpha channel.",
+    "object": "{}. One single object, centred with clear empty margin on every side, isolated on a "
+              "fully transparent background, PNG with alpha channel.",
 }
 
 
@@ -158,7 +161,7 @@ def run_cutout(images: list[Path], out_dir: Path) -> bool:
     """scripts/cutout.py needs numpy, scipy and Pillow: ComfyUI's own Python has them."""
     venv = REPO / "ComfyUI" / ".venv" / "Scripts" / "python.exe"
     python = str(venv) if venv.is_file() else sys.executable
-    print("cutout:")
+    print("cutout:", flush=True)  # or a piped stdout prints the child's lines first
     r = subprocess.run([python, str(REPO / "scripts" / "cutout.py"), *map(str, images), "--out", str(out_dir)])
     return r.returncode == 0
 
@@ -240,7 +243,7 @@ def main() -> int:
     ap.add_argument("--fit", metavar="WxH",
                     help="deliver exactly WxH (e.g. 1920x1080): render near it, then scale and centre-crop; implies --rgb")
     ap.add_argument("--cutout", nargs="?", const="silhouette", choices=sorted(CUTOUT_PROMPTS),
-                    help="one object on plain white, then cut it out with scripts/cutout.py "
+                    help="one object on a transparent background, then cut out with scripts/cutout.py "
                          "(default silhouette: solid black; 'object' keeps its colours); needs --out")
     ap.add_argument("--rgb", action="store_true",
                     help="save plain RGB, dropping the model's near-opaque alpha channel")
@@ -297,7 +300,7 @@ def main() -> int:
             print("--cutout doesn't apply to --enhance; run scripts/cutout.py on the result instead")
             return 2
         args.prompt = CUTOUT_PROMPTS[args.cutout].format(args.prompt.strip().rstrip("."))
-        args.rgb = True
+        args.rgb = False  # the alpha is the point, even with --fit
     missing = [p for p in args.edit + ([args.enhance] if args.enhance else []) if not Path(p).is_file()]
     if missing:
         print("No such image: " + ", ".join(missing))

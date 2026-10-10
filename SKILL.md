@@ -112,7 +112,7 @@ python "<base dir>/scripts/generate.py" "<object>" --cutout --size 1024x1024 --p
 | `--seed N` | Reproduces an image exactly. Printed on every run; note it for the keepers. |
 | `--size WxH` | Multiples of 16, default `1328x1328`. Other good ones: `1664x928` (16:9), `928x1664` (9:16), `1472x1104` (4:3), `1024x1024` (fast). Ignored when editing. |
 | `--fit WxH` | Deliver exactly WxH, any numbers (e.g. `1920x1080` for video): renders near it, then scales and centre-crops. Plain RGB. Use this whenever the user names an exact delivery size. |
-| `--cutout` | One object as a black silhouette on plain white, then cut out (step 5). `--cutout object` keeps its colours. Needs `--out`. Put the prompt before the flag. |
+| `--cutout` | One object as a black silhouette on a real transparent background, then cut out (step 5). `--cutout object` keeps its colours. Needs `--out`. Put the prompt before the flag. |
 | `--rgb` | Save plain RGB. The VAE's alpha channel is slightly under fully opaque in places; drop it for anything that gets composited. |
 | `--count N` | Several different images in one batch from one seed. Faster than separate runs. To reproduce one of them, rerun with the same seed *and* count: the batch comes back in the same order. |
 | `--edit IMG` | A reference image to edit. Repeat for up to 10; the output takes the first one's shape. |
@@ -186,8 +186,9 @@ the preview instead: it cannot move anything.
 ## 5. Silhouettes and cut-outs
 
 For a shape to trace or composite (a hand pose, a tool, an icon, a figure), use `--cutout`.
-It wraps the prompt so the model draws one object as a solid black silhouette on a plain white
-background, then runs `scripts/cutout.py`, which writes next to each image:
+It wraps the prompt so the model draws one object as a solid black silhouette on a fully
+transparent background (the model really draws alpha for that phrasing), keeps the alpha, then
+runs `scripts/cutout.py`, which writes next to each image:
 `NAME_cutout.png` (transparent background), `NAME_mask.png` (white on black),
 `NAME_contour.svg` and `NAME_contour.json` (the outline; outer loops and holes marked) and
 **`NAME_check.png`: the cut-out on a checkerboard with the outline drawn in.**
@@ -212,16 +213,20 @@ background, then runs `scripts/cutout.py`, which writes next to each image:
   | A stray second object kept | `--keep 1` (by default every part over 1% of the largest stays) |
   | A real hole got filled, or you want no holes at all | `--fill-holes 0` keeps every hole, `--fill-holes 1` fills them all |
 
+- **`--cutout object`** keeps the object's own colours instead, and works for white or pale
+  objects, which a white background could never separate.
+- **If a result came back opaque** (the script then cuts against the background colour and
+  may warn the background isn't plain), reroll the seed.
 - **The model is the bigger lever:** a cast shadow, a floor line or a second object is easier to
   fix with a new seed or a more specific prompt than with cleanup options.
-- `cutout.py` works on any image with a plain background, or real transparency, not only
-  on results from here.
+- `cutout.py` works on any image with real transparency or a plain background, not only on
+  results from here.
 
 ## 6. Deliver
 
 - **Write keepers with `--out` into the folder the user named.** If they didn't name one and the
   image is for their project, ask where it goes.
-- **Files are PNG,** RGBA unless `--fit`, `--rgb` or `--cutout` made them RGB, named like
+- **Files are PNG,** RGBA unless `--fit` or `--rgb` made them RGB (`--cutout` keeps RGBA), named like
   `qwen21_00018_.png`. Rename them to something meaningful if they're going into a project.
 - **`--out` strips the prompt metadata.** That matters for anything that ends up in a public
   repo or gets shared. The original with metadata stays in `ComfyUI/output/`.

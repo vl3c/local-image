@@ -106,6 +106,24 @@ class Mask(unittest.TestCase):
         _, how, _ = run(Image.fromarray(a))
         self.assertEqual(how["source"], "colour")
 
+    def test_native_soft_edge_kept_and_junk_colour_replaced(self):
+        # What a render on a transparent background looks like: magenta junk under alpha 0.
+        im = Image.new("RGBA", (W, H), (200, 40, 220, 0))
+        d = ImageDraw.Draw(im)
+        d.ellipse((100, 100, 300, 300), fill=(10, 10, 10, 255))
+        a = np.asarray(im).copy()
+        a[200, 99, 3] = 100  # one soft edge pixel on the left rim
+        src = Image.fromarray(a)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "x.png"
+            src.save(path)
+            self.assertTrue(cutout.process(path, args(out=Path(tmp))))
+            cut = np.asarray(Image.open(Path(tmp) / "x_cutout.png"))
+        self.assertEqual(cut[200, 99, 3], 100, "the model's soft edge should survive")
+        self.assertEqual(cut[200, 200, 3], 255)
+        self.assertEqual(cut[5, 5, 3], 0)
+        self.assertLess(int(cut[5, 5, :3].max()), 30, "transparent pixels should take the object's colour")
+
     def test_busy_background_warns(self):
         rng = np.random.default_rng(0)
         im = Image.fromarray(rng.integers(0, 255, (H, W, 3), dtype=np.uint8))

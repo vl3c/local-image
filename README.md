@@ -35,8 +35,8 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1   # ~30 GB, mostly weight
 - **Enhance** — refine an image's actual pixels when the composition must not move.
 - **Exact delivery sizes** (command line) — `--fit 1920x1080` renders near the target and
   scales and crops to exactly that.
-- **Cut-outs** (command line) — one object on a plain background, returned as a transparent
-  PNG, a clean mask and its outline as SVG and JSON, ready to trace or composite.
+- **Cut-outs** (command line) — one object on a real transparent background, returned as a
+  transparent PNG, a clean mask and its outline as SVG and JSON, ready to trace or composite.
 
 Qwen-Image-2.1 is unusually good at rendering *text inside images* — shop signs, labels,
 handwriting, dense captions. That is the main reason to run this one locally rather than
@@ -181,6 +181,11 @@ how much VRAM came back. It only stops the server started from *this* install: i
 path of this install's `main.py`, so another ComfyUI or any other Python program you run is left
 alone. It exits 0 when the server is stopped (or wasn't running) and 1 if anything survived.
 
+To give the GPU back for a while without stopping the server, ask it to unload the models:
+`curl -X POST -H "Content-Type: application/json" -d "{\"unload_models\": true, \"free_memory\": true}" http://127.0.0.1:8188/free`.
+That leaves about 0.4 GB in use; the next image reloads them from system RAM, about 8 s extra
+on the test machine.
+
 ComfyUI re-executes itself at startup, so a running server is always **two** python
 processes: a small launcher and the real one holding the VRAM. Ending only one in Task
 Manager leaves the other resident — the usual way people end up with VRAM they cannot
@@ -212,8 +217,11 @@ or very large targets, then scales and centre-crops to cover. It works after `--
 opaque images, and it dips slightly below fully opaque in places, which can show as faint
 see-through specks once composited. `--rgb` drops it without changing the size.
 
-**Cut-outs and silhouettes.** `--cutout` asks for one object as a solid black silhouette on a
-plain white background (`--cutout object` keeps its own colours), then runs
+**Cut-outs and silhouettes.** Qwen-Image-2.1 decodes RGBA, and it draws a *real* transparent
+background when the prompt asks for "a fully transparent background, PNG with alpha channel"
+(16 of 16 seeds in testing; plain "on a transparent background" was ignored). `--cutout` adds
+that phrasing to your prompt, for one object as a solid black silhouette (`--cutout object`
+keeps its own colours, and works for white objects too), keeps the alpha channel, then runs
 `scripts/cutout.py` on each result and writes, next to it:
 
 | File | What it is |
@@ -224,9 +232,12 @@ plain white background (`--cutout object` keeps its own colours), then runs
 | `NAME_contour.json` | the same outline as point lists, outer loops and holes marked |
 | `NAME_check.png` | the cut-out over a checkerboard with the outline drawn in: look at this one |
 
-The background colour is read from the image border and the threshold is chosen
-automatically, so any plain background works, light or dark. Cleanup drops specks, fills
-pinholes and smooths the edge; separate parts that are big enough all stay. To adjust, run
+On a transparent render the cut follows the alpha and keeps the model's soft edge; the
+junk colour a render leaves under transparent pixels is replaced, so nothing bleeds into the
+edge when the PNG is resized. On an ordinary image with a plain background, the background
+colour is read from the image border and the threshold is chosen automatically, light or
+dark. Cleanup drops specks, fills pinholes and smooths the edge; separate parts that are big
+enough all stay. To adjust, run
 `cutout.py` again on the same image with ComfyUI's Python, which has the libraries it needs:
 
 ```powershell
@@ -243,8 +254,7 @@ pinholes and smooths the edge; separate parts that are big enough all stay. To a
 | `--hard` | hard-edged alpha |
 
 It warns when the object touches the frame (probably cropped), when the background isn't
-plain, and when `--keep` drops a large part. It also works on any image you already have,
-including one with real transparency, which it uses as is.
+plain, and when `--keep` drops a large part. It works on any image you already have, too.
 
 The server always opens in its own console window titled "local-image ComfyUI server - close this
 window to stop it", and `start.cmd` returns at once, so a server is never running out of sight;
@@ -438,7 +448,7 @@ SKILL.md                        Claude Code skill: generate, check and iterate
 models.json                     weight manifest: URLs, sizes, SHA256
 custom_nodes/qwen_simple_ui.py  the /simple page and one helper node
 scripts/generate.py             CLI: generate, edit, enhance, --fit, --cutout
-scripts/cutout.py               cut an object out of a plain background: mask, PNG, outline
+scripts/cutout.py               cut an object out along its alpha or a plain background: mask, PNG, outline
 scripts/logtee.py               log the server's output; show only what matters in its window
 scripts/download_models.py      resumable, checksum-verified downloader
 scripts/check_repo_safe.py      pre-publish guard
