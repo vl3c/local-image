@@ -2,8 +2,8 @@
 
 A private, fully local image generator and editor. Type a prompt, press Generate.
 
-It runs **Qwen-Image-2.1** on your own GPU through ComfyUI, but replaces ComfyUI's
-node-graph interface with a single page that is just a prompt box and a button. No
+It runs an open-weights image model on your own GPU (currently Qwen-Image-2.1) through
+ComfyUI, but replaces ComfyUI's node-graph interface with a single page that is just a prompt box and a button. No
 accounts, no cloud, no node wiring. Your prompts and images never leave the machine.
 
 ```powershell

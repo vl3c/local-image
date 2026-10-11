@@ -1,6 +1,6 @@
 ---
 name: local-image
-description: Generate or edit images locally with Qwen-Image-2.1 through ComfyUI on this machine's GPU (text-to-image, instruction edits with up to 10 reference images, enhance), look at every result yourself, iterate on the prompt or seed, and deliver the keepers to a folder the user names. Strong at rendering text inside images. Use when the user asks for a local image, local image generation or editing, Qwen-Image, ComfyUI, or wants an image made without a cloud service.
+description: Generate or edit images locally with an open-weights image model through ComfyUI on this machine's GPU (text-to-image, instruction edits with up to 10 reference images, enhance), look at every result yourself, iterate on the prompt or seed, and deliver the keepers to a folder the user names. Strong at rendering text inside images. Use when the user asks for a local image, local image generation or editing, ComfyUI, or wants an image made without a cloud service.
 ---
 
 # local-image: generate and edit images on the local GPU
