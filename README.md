@@ -230,7 +230,9 @@ result at the same size and in the same place, so anything that moves when you s
 difference. Keys `1`, `2`, `3`... (or the buttons) switch, `←`/`→` step through them, holding the
 photo shows the original, `Space` switches to it and back (or shows it while held), and `Z` or a
 double-click toggles full size (drag to pan). It is rewritten after every run into that folder
-and keeps the original from the first edit. `--no-compare` skips it; `python scripts/compare.py
+and keeps the original from the first edit. The original is left off when the link to it would
+show where you keep your files (another drive, or a path through your home folder), since the
+page may end up in a project. `--no-compare` skips it; `python scripts/compare.py
 DIR [--original IMG]` writes one for any folder of images.
 
 **Exact sizes for video.** `--fit 1920x1080` delivers exactly 1920×1080, whatever the

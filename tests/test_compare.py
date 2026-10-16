@@ -69,6 +69,10 @@ class Page(unittest.TestCase):
         text = compare.write(d, title="a<b> {DATA}").read_text(encoding="utf-8")
         self.assertIn("<title>a&lt;b&gt; {DATA}: compare</title>", text)
         self.assertIsNone(re.search(r"(src|href)=[\"']?(https?:)?//|@import|url\(", text))
+        with unittest.mock.patch.object(compare, "collect", return_value=[d / "a<!--<b.png"]):
+            text = compare.write(d).read_text(encoding="utf-8")
+        self.assertNotIn("a<", text)                                 # cannot end the script early
+        self.assertIn('"file": "a\\u003c!--\\u003cb.png"', text)
         many = self.tmp / "many"
         for n in range(25):
             touch(many / f"x_{n:02d}.png")
@@ -103,6 +107,20 @@ class FromGenerate(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             generate.write_compare(args)
         self.assertEqual(items(self.tmp / "out" / "compare.html")[0]["src"], "../photo.png")
+
+    def test_source_link_that_shows_the_home_folder_is_left_off(self):
+        touch(self.tmp / "out" / "qwen21_edit_00001_.png")
+        touch(self.tmp / "out" / "qwen21_edit_00002_.png")
+        home = self.tmp / "home" / "someone"
+        src = touch(home / "Pictures" / "photo.png")
+        args = SimpleNamespace(out=self.tmp / "out", edit=[str(src)], enhance=None)
+        with unittest.mock.patch.object(generate.Path, "home", return_value=home), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            generate.write_compare(args)
+        self.assertIn("left off the page", out.getvalue())
+        self.assertFalse(any(i["original"] for i in items(self.tmp / "out" / "compare.html")))
+        with unittest.mock.patch.object(compare, "_src", return_value="file:///D:/x.png"):
+            self.assertTrue(compare.private_link(src, self.tmp / "out"))
 
     def test_no_compare_needs_out(self):
         out = io.StringIO()

@@ -55,6 +55,13 @@ def _src(p: Path, d: Path) -> str:
         return p.resolve().as_uri()
 
 
+def private_link(p: Path, d: Path) -> bool:
+    """True when the page's link from `d` to `p` would show where the user keeps their files: an
+    absolute file: URL (another drive), or a relative one that climbs through their home folder."""
+    src = _src(Path(p).resolve(), Path(d).resolve())
+    return src.startswith("file:") or Path.home().name.lower() in (s.lower() for s in unquote(src).split("/"))
+
+
 def _previous_original(d: Path) -> Path | None:
     """The original an earlier compare.html in `d` showed, so a later run keeps it."""
     try:
@@ -84,7 +91,7 @@ def write(d: Path, original: Path | None = None, title: str | None = None, min_i
     data += [{"src": _src(p, d), "label": label(p), "file": p.name, "original": False} for p in items]
     for i, it in enumerate(data):
         it["key"] = KEYS[i] if i < len(KEYS) else ""
-    fill = {"TITLE": html.escape(title or d.name), "DATA": json.dumps(data).replace("<", "\u003c")}
+    fill = {"TITLE": html.escape(title or d.name), "DATA": json.dumps(data).replace("<", "\\u003c")}
     page = re.sub(r"\{(TITLE|DATA)\}", lambda m: fill[m.group(1)], TEMPLATE)
     out = d / PAGE
     out.write_text(page, encoding="utf-8")
