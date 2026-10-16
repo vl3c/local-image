@@ -42,8 +42,10 @@ def collect(d: Path) -> list[Path]:
 
 
 def label(p: Path) -> str:
-    """"qwen21_00018_" -> "00018", "qwen21_edit_00003__1" -> "edit 00003 1", anything else as named."""
+    """"qwen21_00018_" -> "00018", "style_long_curls_970x1724" -> "Style long curls". Sizes are left
+    out: every image is shown at the same size, and the tag on the photo has it."""
     s = re.sub(r"^qwen21_", "", p.stem)
+    s = re.sub(r"_?\d+x\d+(?=_|$)", "", s)
     s = re.sub(r"_+", " ", s).strip() or p.stem
     return s[:1].upper() + s[1:]
 
@@ -92,6 +94,9 @@ def write(d: Path, original: Path | None = None, title: str | None = None, min_i
     data += [{"src": _src(p, d), "label": label(p), "file": p.name, "original": False} for p in items]
     for i, it in enumerate(data):
         it["key"] = KEYS[i] if i < len(KEYS) else ""
+        same = [x["label"] for x in data[:i]].count(it["label"])
+        if same:  # e.g. two files named alike but for their size
+            it["label"] += f" {same + 1}"
     fill = {"TITLE": html.escape(title or d.name), "DATA": json.dumps(data).replace("<", "\\u003c")}
     page = re.sub(r"\{(TITLE|DATA)\}", lambda m: fill[m.group(1)], TEMPLATE)
     out = d / PAGE
