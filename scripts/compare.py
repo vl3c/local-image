@@ -42,10 +42,26 @@ def collect(d: Path) -> list[Path]:
 
 
 def label(p: Path) -> str:
-    """"qwen21_00018_" -> "00018", "qwen21_edit_00003__1" -> "edit 00003 1", anything else as named."""
+    """"qwen21_00018_" -> "00018", "style_long_curls_970x1724" -> "Style long curls". Sizes are left
+    out: every image is shown at the same size, and the tag on the photo has it."""
     s = re.sub(r"^qwen21_", "", p.stem)
+    s = re.sub(r"_?\d+x\d+(?=_|$)", "", s)
     s = re.sub(r"_+", " ", s).strip() or p.stem
     return s[:1].upper() + s[1:]
+
+
+def unique(labels: list[str]) -> list[str]:
+    """Number repeats ("Curls", "Curls 2", "Curls 3") without ever reusing a label, including one
+    another file already has by its own name."""
+    taken, base, out = set(), set(labels), []
+    for t in labels:
+        c, n = t, 1
+        while c in taken or (c != t and c in base):
+            n += 1
+            c = f"{t} {n}"
+        taken.add(c)
+        out.append(c)
+    return out
 
 
 def _src(p: Path, d: Path) -> str:
@@ -90,8 +106,9 @@ def write(d: Path, original: Path | None = None, title: str | None = None, min_i
         return None
     data = ([{"src": _src(original, d), "label": "Original", "file": original.name, "original": True}] if original else [])
     data += [{"src": _src(p, d), "label": label(p), "file": p.name, "original": False} for p in items]
-    for i, it in enumerate(data):
+    for i, (it, t) in enumerate(zip(data, unique([x["label"] for x in data]))):
         it["key"] = KEYS[i] if i < len(KEYS) else ""
+        it["label"] = t  # files named alike but for their size get numbers
     fill = {"TITLE": html.escape(title or d.name), "DATA": json.dumps(data).replace("<", "\\u003c")}
     page = re.sub(r"\{(TITLE|DATA)\}", lambda m: fill[m.group(1)], TEMPLATE)
     out = d / PAGE
