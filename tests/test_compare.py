@@ -48,6 +48,10 @@ class Page(unittest.TestCase):
         touch(d / "style_long_curls_1940x3448.png")
         self.assertEqual([i["label"] for i in items(compare.write(d))][-2:],
                          ["Style long curls", "Style long curls 2"])
+        touch(d / "style_long_curls_3880x6896.png")
+        touch(d / "style_long_curls_2.png")
+        self.assertEqual([i["label"] for i in items(compare.write(d))][-4:],
+                         ["Style long curls 2", "Style long curls", "Style long curls 3", "Style long curls 4"])
         self.assertEqual([i["key"] for i in got], ["1", "2", "3"])
         self.assertFalse(any(i["original"] for i in got))
 

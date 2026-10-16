@@ -50,6 +50,20 @@ def label(p: Path) -> str:
     return s[:1].upper() + s[1:]
 
 
+def unique(labels: list[str]) -> list[str]:
+    """Number repeats ("Curls", "Curls 2", "Curls 3") without ever reusing a label, including one
+    another file already has by its own name."""
+    taken, base, out = set(), set(labels), []
+    for t in labels:
+        c, n = t, 1
+        while c in taken or (c != t and c in base):
+            n += 1
+            c = f"{t} {n}"
+        taken.add(c)
+        out.append(c)
+    return out
+
+
 def _src(p: Path, d: Path) -> str:
     try:
         return quote(Path(os.path.relpath(p, d)).as_posix())
@@ -92,11 +106,9 @@ def write(d: Path, original: Path | None = None, title: str | None = None, min_i
         return None
     data = ([{"src": _src(original, d), "label": "Original", "file": original.name, "original": True}] if original else [])
     data += [{"src": _src(p, d), "label": label(p), "file": p.name, "original": False} for p in items]
-    for i, it in enumerate(data):
+    for i, (it, t) in enumerate(zip(data, unique([x["label"] for x in data]))):
         it["key"] = KEYS[i] if i < len(KEYS) else ""
-        same = [x["label"] for x in data[:i]].count(it["label"])
-        if same:  # e.g. two files named alike but for their size
-            it["label"] += f" {same + 1}"
+        it["label"] = t  # files named alike but for their size get numbers
     fill = {"TITLE": html.escape(title or d.name), "DATA": json.dumps(data).replace("<", "\\u003c")}
     page = re.sub(r"\{(TITLE|DATA)\}", lambda m: fill[m.group(1)], TEMPLATE)
     out = d / PAGE
