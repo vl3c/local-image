@@ -56,6 +56,12 @@ stylesheet — it uses system fonts. Every request is same-origin and relative:
 `/models/...`, `/upload/image`, `/prompt`, `/history/...`, `/view`, plus a WebSocket built
 from `location.host`.
 
+**`compare.html` makes no requests beyond the images next to it.** `scripts/compare.py`
+writes it with inline styles and script, system fonts, and relative links to the images in the
+same folder (and to the image an edit started from). Opened from disk, it talks to nothing.
+`generate.py` leaves that source image off the page when the link would be absolute (another
+drive) or would climb through your home folder, so the page never records where your files are.
+
 One correction worth recording, because it is easy to repeat: ComfyUI sets
 `HF_HUB_DISABLE_TELEMETRY=1` and `DO_NOT_TRACK=1` at startup, but its own source comments
 those as having no effect on core ComfyUI — they exist for the benefit of custom nodes.
