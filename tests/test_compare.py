@@ -119,6 +119,10 @@ class FromGenerate(unittest.TestCase):
             generate.write_compare(args)
         self.assertIn("left off the page", out.getvalue())
         self.assertFalse(any(i["original"] for i in items(self.tmp / "out" / "compare.html")))
+        compare.write(self.tmp / "out", touch(self.tmp / "other.png"))   # an earlier edit's source...
+        with unittest.mock.patch.object(generate.Path, "home", return_value=home),                 contextlib.redirect_stdout(io.StringIO()):
+            generate.write_compare(args)                                # ...is not this edit's original
+        self.assertFalse(any(i["original"] for i in items(self.tmp / "out" / "compare.html")))
         with unittest.mock.patch.object(compare, "_src", return_value="file:///D:/x.png"):
             self.assertTrue(compare.private_link(src, self.tmp / "out"))
 

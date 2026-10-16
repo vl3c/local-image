@@ -76,12 +76,13 @@ def _previous_original(d: Path) -> Path | None:
     return None
 
 
-def write(d: Path, original: Path | None = None, title: str | None = None, min_images: int = 1) -> Path | None:
+def write(d: Path, original: Path | None = None, title: str | None = None, min_images: int = 1,
+          keep_previous: bool = True) -> Path | None:
     """Write `d`/compare.html for the images in `d`, with `original` (the image they were edited
     from; by default the one an earlier page here showed) first. Returns None, writing nothing,
     when the page would show fewer than `min_images` images."""
     d = Path(d).resolve()
-    original = Path(original).resolve() if original else _previous_original(d)
+    original = Path(original).resolve() if original else _previous_original(d) if keep_previous else None
     if original and original.suffix.lower() not in IMAGE_EXTS:
         original = None  # a browser can't show it
     items = [p for p in collect(d) if p != original]

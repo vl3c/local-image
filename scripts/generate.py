@@ -215,12 +215,14 @@ def write_compare(args) -> None:
     """compare.html in --out, with the edited or enhanced image first as the original."""
     import compare  # scripts/compare.py
     source = args.edit[0] if args.edit else args.enhance
-    if source and compare.private_link(Path(source), args.out):
+    dropped = bool(source) and compare.private_link(Path(source), args.out)
+    if dropped:
         # The page may end up in a project or be shared: no link that shows the user's folders.
         print("compare.html: the source image is left off the page (linking it would show your folders)")
         source = None
     try:
-        page = compare.write(args.out, Path(source) if source else None, min_images=2)
+        page = compare.write(args.out, Path(source) if source else None, min_images=2,
+                             keep_previous=not dropped)  # not an earlier edit's source
     except OSError as exc:  # a page is a convenience; never fail a finished render over it
         print(f"compare.html not written: {exc}")
         return
