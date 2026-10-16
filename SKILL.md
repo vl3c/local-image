@@ -124,6 +124,7 @@ python "<base dir>/scripts/generate.py" "<object>" --cutout --size 1024x1024 --p
 | `--timeout S` | Give up on the result after S seconds (default 900). The job still finishes on the server. |
 | `--out DIR` | Copy results to DIR with the prompt metadata stripped. Prints the full paths. Never overwrites: a name that already exists gets a `_1` suffix. |
 | `--keep-metadata` | With `--out`, keep the embedded prompt, seed and workflow. |
+| `--no-compare` | With `--out`, don't write `compare.html` (see step 4). |
 
 An identical request (same prompt, seed and settings) comes back instantly from the server's
 cache: it returns the earlier files again rather than rendering. To get a different image,
@@ -173,6 +174,14 @@ Open each image with the Read tool before you judge it or show it to the user. C
   saturated, with an HDR-like crunch. The model ignored the instruction. Rephrase it (step 3)
   and change the seed. Running the same prompt at full quality won't fix it.
 - **Artifacts:** mangled hands, melted text, a duplicated object, edges that don't match.
+
+**Variants: always give the user the comparison page.** Every run with `--out` that leaves two
+or more images in that folder (a `--count`, several seeds, or edits of one image) writes
+`compare.html` there, with the image an `--edit` or `--enhance` started from shown first as the
+original. Whenever you show the user variants, give them that page's local path: opened from disk,
+it flips between them at the same size and place with the keys 1, 2, 3... (Space or holding the
+photo shows the original, Z full size). Never put their images on an online page instead. For a
+folder you filled some other way, run `python "<base dir>/scripts/compare.py" <dir> [--original IMG]`.
 
 **What to change when it misses:**
 - Composition wrong: change the seed, or the prompt's description of the layout.
@@ -227,7 +236,8 @@ runs `scripts/cutout.py`, which writes next to each image:
 ## 6. Deliver
 
 - **Write keepers with `--out` into the folder the user named.** If they didn't name one and the
-  image is for their project, ask where it goes.
+  image is for their project, ask where it goes. Add `--no-compare` when that folder is part of a
+  project (a page with links to their images doesn't belong in it), unless they want it there.
 - **Files are PNG,** RGBA unless `--fit` or `--rgb` made them RGB (`--cutout` keeps RGBA), named like
   `qwen21_00018_.png`. Rename them to something meaningful if they're going into a project.
 - **`--out` strips the prompt metadata.** That matters for anything that ends up in a public

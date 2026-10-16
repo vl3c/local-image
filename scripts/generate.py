@@ -28,6 +28,9 @@ by hand on the same file to adjust the cleanup (--open, --close, ...).
 
 --out copies the results into a folder of your choosing, with the embedded
 prompt, seed and workflow stripped (the originals in ComfyUI/output keep them).
+Once that folder holds two or more images (counting the --edit or --enhance input),
+it also gets compare.html, a page opened from disk to flip between them with the keys
+1, 2, 3... (see scripts/compare.py); --no-compare skips it.
 
 Exit status: 0 done, 1 failed or no server, 2 bad arguments.
 """
@@ -208,6 +211,19 @@ def run_cutout(images: list[Path], out_dir: Path) -> bool:
     return r.returncode == 0
 
 
+def write_compare(args) -> None:
+    """compare.html in --out, with the edited or enhanced image first as the original."""
+    import compare  # scripts/compare.py
+    source = args.edit[0] if args.edit else args.enhance
+    try:
+        page = compare.write(args.out, Path(source) if source else None, min_images=2)
+    except OSError as exc:  # a page is a convenience; never fail a finished render over it
+        print(f"compare.html not written: {exc}")
+        return
+    if page:
+        print(f"compare: {page}")
+
+
 def parse_size(text: str) -> tuple[int, int]:
     w, h = (int(v) for v in text.lower().split("x"))
     if w <= 0 or h <= 0:
@@ -313,6 +329,8 @@ def main() -> int:
                     help="copy the results here, prompt metadata stripped")
     ap.add_argument("--keep-metadata", action="store_true",
                     help="with --out, keep the embedded prompt, seed and workflow")
+    ap.add_argument("--no-compare", action="store_true",
+                    help="with --out, don't write compare.html (written once the folder has 2+ images)")
     args = ap.parse_args()
 
     if args.fit:
@@ -338,6 +356,9 @@ def main() -> int:
 
     if args.keep_metadata and not args.out:
         print("--keep-metadata only applies with --out")
+        return 2
+    if args.no_compare and not args.out:
+        print("--no-compare only applies with --out")
         return 2
     if args.cutout:
         if not args.out:
@@ -428,6 +449,8 @@ def wait_for_result(args, pid: str, t0: float) -> int:
             print(f"{time.time() - t0:.1f}s")
             if args.cutout and not run_cutout(fetched, args.out):
                 return 1
+            if args.out and not args.no_compare:
+                write_compare(args)
             return 0
         time.sleep(0.5)
 

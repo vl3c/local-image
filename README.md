@@ -223,6 +223,16 @@ results into `DIR` with the embedded prompt stripped (`--keep-metadata` keeps it
 `--timeout` stops waiting for a result (default 900 s). `python scripts/generate.py -h` lists
 everything.
 
+**Comparing variants.** Once an `--out` folder holds two or more images (counting the image an
+`--edit` or `--enhance` started from), `generate.py` also writes `compare.html` there: a dark
+page you open from disk (it loads nothing from the internet) that shows the original and every
+result at the same size and in the same place, so anything that moves when you switch is a real
+difference. Keys `1`, `2`, `3`... (or the buttons) switch, `←`/`→` step through them, holding the
+photo shows the original, `Space` switches to it and back (or shows it while held), and `Z` or a
+double-click toggles full size (drag to pan). It is rewritten after every run into that folder
+and keeps the original from the first edit. `--no-compare` skips it; `python scripts/compare.py
+DIR [--original IMG]` writes one for any folder of images.
+
 **Exact sizes for video.** `--fit 1920x1080` delivers exactly 1920×1080, whatever the
 numbers. It renders at the target's aspect rounded up to multiples of 16 (1920×1088 here,
 so only 4 rows come off top and bottom), or near it within 1–2.4 megapixels for very small
@@ -459,6 +469,7 @@ SKILL.md                        Claude Code skill: generate, check and iterate
 models.json                     weight manifest: URLs, sizes, SHA256
 custom_nodes/qwen_simple_ui.py  the /simple page and one helper node
 scripts/generate.py             CLI: generate, edit, enhance, --fit, --cutout
+scripts/compare.py              compare.html: flip between results with the keys 1, 2, 3...
 scripts/cutout.py               cut an object out along its alpha or a plain background: mask, PNG, outline
 scripts/logtee.py               log the server's output; show only what matters in its window
 scripts/download_models.py      resumable, checksum-verified downloader
